@@ -38,9 +38,14 @@ class coinbasepro(Exchange):
             'userAgent': self.userAgents['chrome'],
             'pro': True,
             'has': {
+                'CORS': True,
+                'spot': True,
+                'margin': None,  # has but not fully inplemented
+                'swap': None,  # has but not fully inplemented
+                'future': None,  # has but not fully inplemented
+                'option': None,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
-                'CORS': True,
                 'createDepositAddress': True,
                 'createOrder': True,
                 'deposit': True,
@@ -293,27 +298,30 @@ class coinbasepro(Exchange):
     def fetch_markets(self, params={}):
         response = self.publicGetProducts(params)
         #
-        #     [
-        #         {
-        #             "id":"ZEC-BTC",
-        #             "base_currency":"ZEC",
-        #             "quote_currency":"BTC",
-        #             "base_min_size":"0.01000000",
-        #             "base_max_size":"1500.00000000",
-        #             "quote_increment":"0.00000100",
-        #             "base_increment":"0.00010000",
-        #             "display_name":"ZEC/BTC",
-        #             "min_market_funds":"0.001",
-        #             "max_market_funds":"30",
-        #             "margin_enabled":false,
-        #             "post_only":false,
-        #             "limit_only":false,
-        #             "cancel_only":false,
-        #             "trading_disabled":false,
-        #             "status":"online",
-        #             "status_message":""
-        #         }
-        #     ]
+        #    [
+        #        {
+        #            "id": "ZEC-BTC",
+        #            "base_currency": "ZEC",
+        #            "quote_currency": "BTC",
+        #            "base_min_size": "0.0056",
+        #            "base_max_size": "3600",
+        #            "quote_increment": "0.000001",
+        #            "base_increment": "0.0001",
+        #            "display_name": "ZEC/BTC",
+        #            "min_market_funds": "0.000016",
+        #            "max_market_funds": "12",
+        #            "margin_enabled": False,
+        #            "fx_stablecoin": False,
+        #            "max_slippage_percentage": "0.03000000",
+        #            "post_only": False,
+        #            "limit_only": False,
+        #            "cancel_only": False,
+        #            "trading_disabled": False,
+        #            "status": "online",
+        #            "status_message": "",
+        #            "auction_mode": False
+        #          },
+        #    ]
         #
         result = []
         for i in range(0, len(response)):
@@ -323,48 +331,48 @@ class coinbasepro(Exchange):
             quoteId = self.safe_string(market, 'quote_currency')
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            symbol = base + '/' + quote
-            priceLimits = {
-                'min': self.safe_number(market, 'quote_increment'),
-                'max': None,
-            }
-            precision = {
-                'amount': self.safe_number(market, 'base_increment'),
-                'price': self.safe_number(market, 'quote_increment'),
-            }
             status = self.safe_string(market, 'status')
-            active = (status == 'online')
             result.append(self.extend(self.fees['trading'], {
                 'id': id,
-                'symbol': symbol,
-                'baseId': baseId,
-                'quoteId': quoteId,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
+                'baseId': baseId,
+                'quoteId': quoteId,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
-                'margin': False,
-                'future': False,
+                'margin': self.safe_value(market, 'margin_enabled'),
                 'swap': False,
+                'future': False,
                 'option': False,
-                'optionType': None,
-                'strike': None,
+                'active': (status == 'online'),
+                'contract': False,
                 'linear': None,
                 'inverse': None,
-                'contract': False,
                 'contractSize': None,
-                'settle': None,
-                'settleId': None,
                 'expiry': None,
                 'expiryDatetime': None,
-                'active': active,
-                'precision': precision,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': self.safe_number(market, 'base_increment'),
+                    'price': self.safe_number(market, 'quote_increment'),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': self.safe_number(market, 'base_min_size'),
                         'max': self.safe_number(market, 'base_max_size'),
                     },
-                    'price': priceLimits,
+                    'price': {
+                        'min': None,
+                        'max': None,
+                    },
                     'cost': {
                         'min': self.safe_number(market, 'min_market_funds'),
                         'max': self.safe_number(market, 'max_market_funds'),
@@ -631,27 +639,24 @@ class coinbasepro(Exchange):
         #
         timestamp = self.parse8601(self.safe_string_2(trade, 'time', 'created_at'))
         marketId = self.safe_string(trade, 'product_id')
-        symbol = self.safe_symbol(marketId, market, '-')
+        market = self.safe_market(marketId, market, '-')
         feeRate = None
-        feeCurrency = None
         takerOrMaker = None
         cost = None
-        if market is not None:
-            feeCurrencyId = self.safe_string_lower(market, 'quoteId')
+        feeCurrencyId = self.safe_string_lower(market, 'quoteId')
+        if feeCurrencyId is not None:
             costField = feeCurrencyId + '_value'
-            cost = self.safe_number(trade, costField)
-            feeCurrency = market['quote']
+            cost = self.safe_string(trade, costField)
             liquidity = self.safe_string(trade, 'liquidity')
             if liquidity is not None:
                 takerOrMaker = 'taker' if (liquidity == 'T') else 'maker'
-                feeRate = market[takerOrMaker]
-        feeCost = self.safe_number_2(trade, 'fill_fees', 'fee')
+                feeRate = self.safe_string(market, takerOrMaker)
+        feeCost = self.safe_string_2(trade, 'fill_fees', 'fee')
         fee = {
             'cost': feeCost,
-            'currency': feeCurrency,
+            'currency': market['quote'],
             'rate': feeRate,
         }
-        type = None
         id = self.safe_string(trade, 'trade_id')
         side = 'sell' if (trade['side'] == 'buy') else 'buy'
         orderId = self.safe_string(trade, 'order_id')
@@ -660,27 +665,23 @@ class coinbasepro(Exchange):
         takerOrderId = self.safe_string(trade, 'taker_order_id')
         if (orderId is not None) or ((makerOrderId is not None) and (takerOrderId is not None)):
             side = 'buy' if (trade['side'] == 'buy') else 'sell'
-        priceString = self.safe_string(trade, 'price')
-        amountString = self.safe_string(trade, 'size')
-        price = self.parse_number(priceString)
-        amount = self.parse_number(amountString)
-        if cost is None:
-            cost = self.parse_number(Precise.string_mul(priceString, amountString))
-        return {
+        price = self.safe_string(trade, 'price')
+        amount = self.safe_string(trade, 'size')
+        return self.safe_trade({
             'id': id,
             'order': orderId,
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
-            'type': type,
+            'symbol': market['symbol'],
+            'type': None,
             'takerOrMaker': takerOrMaker,
             'side': side,
             'price': price,
             'amount': amount,
             'fee': fee,
             'cost': cost,
-        }
+        }, market)
 
     def fetch_my_trades(self, symbol=None, since=None, limit=None, params={}):
         # as of 2018-08-23
@@ -810,12 +811,9 @@ class coinbasepro(Exchange):
         feeCost = self.safe_number(order, 'fill_fees')
         fee = None
         if feeCost is not None:
-            feeCurrencyCode = None
-            if market is not None:
-                feeCurrencyCode = market['quote']
             fee = {
                 'cost': feeCost,
-                'currency': feeCurrencyCode,
+                'currency': market['quote'],
                 'rate': None,
             }
         id = self.safe_string(order, 'id')

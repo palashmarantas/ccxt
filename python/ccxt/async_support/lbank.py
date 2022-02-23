@@ -4,7 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.async_support.base.exchange import Exchange
-import math
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
@@ -22,19 +21,49 @@ class lbank(Exchange):
             'countries': ['CN'],
             'version': 'v1',
             'has': {
+                'CORS': None,
+                'spot': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
                 'cancelOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchClosedOrders': True,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchIsolatedPositions': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': None,  # status 0 API doesn't work
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrders': True,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -104,6 +133,17 @@ class lbank(Exchange):
 
     async def fetch_markets(self, params={}):
         response = await self.publicGetAccuracy(params)
+        #
+        #    [
+        #        {
+        #            "symbol": "btc_usdt",
+        #            "quantityAccuracy": "4",
+        #            "minTranQua": "0.0001",
+        #            "priceAccuracy": "2"
+        #        },
+        #        ...
+        #    ]
+        #
         result = []
         for i in range(0, len(response)):
             market = response[i]
@@ -121,30 +161,46 @@ class lbank(Exchange):
                 quoteId = parts[1]
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            symbol = base + '/' + quote
-            precision = {
-                'amount': self.safe_integer(market, 'quantityAccuracy'),
-                'price': self.safe_integer(market, 'priceAccuracy'),
-            }
             result.append({
                 'id': id,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
                 'active': True,
-                'precision': precision,
+                'contract': False,
+                'linear': None,
+                'inverse': None,
+                'contractSize': None,
+                'expiry': None,
+                'expiryDatetime': None,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': self.safe_integer(market, 'quantityAccuracy'),
+                    'price': self.safe_integer(market, 'priceAccuracy'),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
-                        'min': math.pow(10, -precision['amount']),
+                        'min': None,
                         'max': None,
                     },
                     'price': {
-                        'min': math.pow(10, -precision['price']),
-                        'max': math.pow(10, precision['price']),
+                        'min': None,
+                        'max': None,
                     },
                     'cost': {
                         'min': None,
@@ -248,9 +304,7 @@ class lbank(Exchange):
         return self.parse_order_book(response, symbol)
 
     def parse_trade(self, trade, market=None):
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         timestamp = self.safe_integer(trade, 'date_ms')
         priceString = self.safe_string(trade, 'price')
         amountString = self.safe_string(trade, 'amount')
@@ -266,7 +320,7 @@ class lbank(Exchange):
             'info': self.safe_value(trade, 'info', trade),
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': None,
             'type': type,
             'side': side,

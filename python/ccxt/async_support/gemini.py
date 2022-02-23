@@ -40,29 +40,58 @@ class gemini(Exchange):
             'rateLimit': 100,
             'version': 'v1',
             'has': {
-                'fetchDepositAddressesByNetwork': True,
-                'cancelOrder': True,
                 'CORS': None,
+                'spot': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
+                'cancelOrder': True,
                 'createDepositAddress': True,
                 'createMarketOrder': None,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
                 'fetchBidsAsks': None,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchClosedOrders': None,
                 'fetchDepositAddress': None,  # TODO
+                'fetchDepositAddressesByNetwork': True,
                 'fetchDeposits': None,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchIsolatedPositions': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrders': None,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
                 'fetchTransactions': True,
                 'fetchWithdrawals': None,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
                 'withdraw': True,
             },
             'urls': {
@@ -283,34 +312,47 @@ class gemini(Exchange):
             minAmount = self.safe_number(minAmountParts, 0)
             amountPrecisionString = cells[2].replace('<td>', '')
             amountPrecisionParts = amountPrecisionString.split(' ')
-            amountPrecision = self.safe_number(amountPrecisionParts, 0)
             idLength = len(marketId) - 0
             startingIndex = idLength - 3
             quoteId = marketId[startingIndex:idLength]
             quote = self.safe_currency_code(quoteId)
             pricePrecisionString = cells[3].replace('<td>', '')
             pricePrecisionParts = pricePrecisionString.split(' ')
-            pricePrecision = self.safe_number(pricePrecisionParts, 0)
             baseId = marketId.replace(quoteId, '')
             base = self.safe_currency_code(baseId)
-            symbol = base + '/' + quote
-            active = None
             result.append({
                 'id': marketId,
-                'info': row,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
-                'active': active,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'active': None,
+                'contract': False,
+                'linear': None,
+                'inverse': None,
+                'contractSize': None,
+                'expiry': None,
+                'expiryDatetime': None,
+                'strike': None,
+                'optionType': None,
                 'precision': {
-                    'amount': amountPrecision,
-                    'price': pricePrecision,
+                    'amount': self.safe_number(amountPrecisionParts, 0),
+                    'price': self.safe_number(pricePrecisionParts, 0),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': minAmount,
                         'max': None,
@@ -324,6 +366,7 @@ class gemini(Exchange):
                         'max': None,
                     },
                 },
+                'info': row,
             })
         return result
 
@@ -338,21 +381,39 @@ class gemini(Exchange):
             quoteId = marketId[idLength - 3:idLength]
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            symbol = base + '/' + quote
-            precision = {
-                'amount': None,
-                'price': None,
-            }
             result.append({
                 'id': marketId,
-                'info': market,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
-                'precision': precision,
+                'settleId': None,
+                'type': 'spot',
+                'spot': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'active': None,
+                'contract': False,
+                'linear': None,
+                'inverse': None,
+                'contractSize': None,
+                'expiry': None,
+                'expiryDatetime': None,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'price': None,
+                    'amount': None,
+                },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': None,
                         'max': None,
@@ -366,7 +427,7 @@ class gemini(Exchange):
                         'max': None,
                     },
                 },
-                'active': None,
+                'info': market,
             })
         return result
 
@@ -482,30 +543,26 @@ class gemini(Exchange):
         timestamp = self.safe_integer(volume, 'timestamp')
         symbol = None
         marketId = self.safe_string_lower(ticker, 'pair')
+        market = self.safe_market(marketId, market)
         baseId = None
         quoteId = None
         base = None
         quote = None
-        if marketId is not None:
-            if marketId in self.markets_by_id:
-                market = self.markets_by_id[marketId]
+        if (marketId is not None) and (market is None):
+            idLength = len(marketId) - 0
+            if idLength == 7:
+                baseId = marketId[0:4]
+                quoteId = marketId[4:7]
             else:
-                idLength = len(marketId) - 0
-                if idLength == 7:
-                    baseId = marketId[0:4]
-                    quoteId = marketId[4:7]
-                else:
-                    baseId = marketId[0:3]
-                    quoteId = marketId[3:6]
-                base = self.safe_currency_code(baseId)
-                quote = self.safe_currency_code(quoteId)
-                symbol = base + '/' + quote
+                baseId = marketId[0:3]
+                quoteId = marketId[3:6]
+            base = self.safe_currency_code(baseId)
+            quote = self.safe_currency_code(quoteId)
+            symbol = base + '/' + quote
         if (symbol is None) and (market is not None):
             symbol = market['symbol']
-            baseId = market['baseId'].upper()
-            quoteId = market['quoteId'].upper()
-            base = market['base']
-            quote = market['quote']
+            baseId = self.safe_string_upper(market, 'baseId')
+            quoteId = self.safe_string_upper(market, 'quoteId')
         price = self.safe_string(ticker, 'price')
         last = self.safe_string_2(ticker, 'last', 'close', price)
         percentage = self.safe_string(ticker, 'percentChange24h')

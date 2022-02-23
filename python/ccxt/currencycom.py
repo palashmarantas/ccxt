@@ -8,6 +8,7 @@ from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
+from ccxt.base.errors import BadSymbol
 from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
@@ -28,29 +29,91 @@ class currencycom(Exchange):
             'rateLimit': 500,
             'certified': True,
             'pro': True,
-            'version': 'v1',
+            'version': 'v2',
             # new metainfo interface
             'has': {
-                'cancelOrder': True,
                 'CORS': None,
+                'spot': True,
+                'margin': True,
+                'swap': True,
+                'future': False,
+                'option': False,
+                'addMargin': None,
+                'cancelAllOrders': None,
+                'cancelOrder': True,
+                'cancelOrders': None,
+                'createDepositAddress': None,
+                'createLimitOrder': True,
+                'createMarketOrder': True,
                 'createOrder': True,
+                'deposit': None,
+                'editOrder': 'emulated',
                 'fetchAccounts': True,
                 'fetchBalance': True,
+                'fetchBidsAsks': None,
+                'fetchBorrowRate': None,
+                'fetchBorrowRateHistory': None,
+                'fetchBorrowRates': None,
+                'fetchBorrowRatesPerSymbol': None,
+                'fetchCanceledOrders': None,
+                'fetchClosedOrder': None,
+                'fetchClosedOrders': None,
+                'fetchCurrencies': True,
+                'fetchDeposit': None,
+                'fetchDepositAddress': True,
+                'fetchDepositAddresses': False,
+                'fetchDepositAddressesByNetwork': False,
+                'fetchDeposits': True,
+                'fetchFundingFee': None,
+                'fetchFundingFees': None,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchL2OrderBook': True,
+                'fetchLedger': None,
+                'fetchLedgerEntry': None,
+                'fetchLeverage': True,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
+                'fetchOpenOrder': None,
                 'fetchOpenOrders': True,
+                'fetchOrder': None,
                 'fetchOrderBook': True,
+                'fetchOrderBooks': None,
+                'fetchOrders': None,
+                'fetchOrderTrades': None,
+                'fetchPosition': None,
+                'fetchPositions': None,
+                'fetchPositionsRisk': None,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': None,
                 'fetchTradingFees': True,
+                'fetchTradingLimits': None,
+                'fetchTransactions': True,
+                'fetchTransfers': None,
+                'fetchWithdrawal': None,
+                'fetchWithdrawals': True,
+                'reduceMargin': None,
+                'setLeverage': None,
+                'setMarginMode': None,
+                'setPositionMode': None,
+                'signIn': None,
+                'transfer': None,
+                'withdraw': None,
             },
             'timeframes': {
                 '1m': '1m',
-                '3m': '3m',
                 '5m': '5m',
+                '10m': '10m',
                 '15m': '15m',
                 '30m': '30m',
                 '1h': '1h',
@@ -78,30 +141,60 @@ class currencycom(Exchange):
             'api': {
                 'public': {
                     'get': [
-                        'time',
-                        'exchangeInfo',
-                        'depth',
-                        'aggTrades',
-                        'klines',
-                        'ticker/24hr',
+                        'v1/time',
+                        'v2/time',
+                        'v1/exchangeInfo',
+                        'v2/exchangeInfo',
+                        'v1/depth',
+                        'v2/depth',
+                        'v1/aggTrades',
+                        'v2/aggTrades',
+                        'v1/klines',
+                        'v2/klines',
+                        'v1/ticker/24hr',
+                        'v2/ticker/24hr',
                     ],
                 },
                 'private': {
                     'get': [
-                        'leverageSettings',
-                        'openOrders',
-                        'tradingPositions',
-                        'account',
-                        'myTrades',
+                        'v1/account',
+                        'v2/account',
+                        'v1/currencies',
+                        'v2/currencies',
+                        'v1/deposits',
+                        'v2/deposits',
+                        'v1/depositAddress',
+                        'v2/depositAddress',
+                        'v1/ledger',
+                        'v2/ledger',
+                        'v1/leverageSettings',
+                        'v2/leverageSettings',
+                        'v1/myTrades',
+                        'v2/myTrades',
+                        'v1/openOrders',
+                        'v2/openOrders',
+                        'v1/tradingPositions',
+                        'v2/tradingPositions',
+                        'v1/tradingPositionsHistory',
+                        'v2/tradingPositionsHistory',
+                        'v1/transactions',
+                        'v2/transactions',
+                        'v1/withdrawals',
+                        'v2/withdrawals',
                     ],
                     'post': [
-                        'order',
-                        'updateTradingPosition',
-                        'updateTradingOrder',
-                        'closeTradingPosition',
+                        'v1/order',
+                        'v2/order',
+                        'v1/updateTradingPosition',
+                        'v2/updateTradingPosition',
+                        'v1/updateTradingOrder',
+                        'v2/updateTradingOrder',
+                        'v1/closeTradingPosition',
+                        'v2/closeTradingPosition',
                     ],
                     'delete': [
-                        'order',
+                        'v1/order',
+                        'v2/order',
                     ],
                 },
             },
@@ -136,6 +229,7 @@ class currencycom(Exchange):
                     'Order would trigger immediately.': InvalidOrder,
                     'Account has insufficient balance for requested action.': InsufficientFunds,
                     'Rest API trading is not enabled.': ExchangeNotAvailable,
+                    'Only leverage symbol allowed here:': BadSymbol,  # when you fetchLeverage for non-leverage symbols, like 'BTC/USDT' instead of 'BTC/USDT_LEVERAGE': {"code":"-1128","msg":"Only leverage symbol allowed here: BTC/USDT"}
                 },
                 'exact': {
                     '-1000': ExchangeNotAvailable,  # {"code":-1000,"msg":"An unknown error occured while processing the request."}
@@ -157,11 +251,13 @@ class currencycom(Exchange):
                 'ACN': 'Accenture',
                 'BNS': 'Bank of Nova Scotia',
                 'CAR': 'Avis Budget Group Inc',
+                'CLR': 'Continental Resources',
                 'EDU': 'New Oriental Education & Technology Group Inc',
                 'ETN': 'Eaton',
                 'FOX': 'Fox Corporation',
                 'GM': 'General Motors Co',
                 'IQ': 'iQIYI',
+                'OSK': 'Oshkosh',
                 'PLAY': "Dave & Buster's Entertainment",
             },
         })
@@ -170,7 +266,7 @@ class currencycom(Exchange):
         return self.milliseconds() - self.options['timeDifference']
 
     def fetch_time(self, params={}):
-        response = self.publicGetTime(params)
+        response = self.publicGetV2Time(params)
         #
         #     {
         #         "serverTime": 1590998366609
@@ -178,8 +274,71 @@ class currencycom(Exchange):
         #
         return self.safe_integer(response, 'serverTime')
 
+    def fetch_currencies(self, params={}):
+        # requires authentication
+        if not self.check_required_credentials(False):
+            return None
+        response = self.privateGetV2Currencies(params)
+        #
+        #     [
+        #         {
+        #           name: "US Dollar",
+        #           displaySymbol: "USD.cx",
+        #           precision: "2",
+        #           type: "FIAT",
+        #           minWithdrawal: "100.0",
+        #           maxWithdrawal: "1.0E+8",
+        #           minDeposit: "100.0",
+        #         },
+        #         {
+        #             name: "Bitcoin",
+        #             displaySymbol: "BTC",
+        #             precision: "8",
+        #             type: "CRYPTO",  # Note: only several major ones have self value. Others(like USDT) have value : "TOKEN"
+        #             minWithdrawal: "0.00020",
+        #             commissionFixed: "0.00010",
+        #             minDeposit: "0.00010",
+        #         },
+        #     ]
+        #
+        result = {}
+        for i in range(0, len(response)):
+            currency = response[i]
+            id = self.safe_string(currency, 'displaySymbol')
+            code = self.safe_currency_code(id)
+            fee = self.safe_number(currency, 'commissionFixed')
+            precision = self.safe_integer(currency, 'precision')
+            result[code] = {
+                'id': id,
+                'code': code,
+                'address': self.safe_string(currency, 'baseAddress'),
+                'info': currency,
+                'type': self.safe_string_lower(currency, 'type'),
+                'name': self.safe_string(currency, 'name'),
+                'active': None,
+                'deposit': None,
+                'withdraw': None,
+                'fee': fee,
+                'precision': precision,
+                'limits': {
+                    'amount': {
+                        'min': None,
+                        'max': None,
+                    },
+                    'withdraw': {
+                        'min': self.safe_number(currency, 'minWithdrawal'),
+                        'max': None,
+                    },
+                    'deposit': {
+                        'min': self.safe_number(currency, 'minDeposit'),
+                        'max': None,
+                    },
+                },
+            }
+        return result
+
     def fetch_markets(self, params={}):
-        response = self.publicGetExchangeInfo(params)
+        response = self.publicGetV2ExchangeInfo(params)
         #
         #     {
         #         "timezone":"UTC",
@@ -267,15 +426,9 @@ class currencycom(Exchange):
                 type = 'margin'
             spot = (type == 'spot')
             margin = (type == 'margin')
-            exchangeFee = self.safe_number_2(market, 'exchangeFee', 'tradingFee')
-            makerFee = self.safe_number(market, 'makerFee', exchangeFee)
-            takerFee = self.safe_number(market, 'takerFee', exchangeFee)
-            maker = None
-            taker = None
-            if makerFee is not None:
-                maker = makerFee / 100
-            if takerFee is not None:
-                taker = takerFee / 100
+            exchangeFee = self.safe_string_2(market, 'exchangeFee', 'tradingFee')
+            maker = Precise.string_div(self.safe_string(market, 'makerFee', exchangeFee), '100')
+            taker = Precise.string_div(self.safe_string(market, 'takerFee', exchangeFee), '100')
             limitPriceMin = None
             limitPriceMax = None
             precisionPrice = self.safe_number(market, 'tickSize')
@@ -290,7 +443,7 @@ class currencycom(Exchange):
                 maxPrice = self.safe_number(filter, 'maxPrice')
                 if (maxPrice is not None) and (maxPrice > 0):
                     limitPriceMax = maxPrice
-            precisionAmount = self.parse_precision(self.safe_string(market, 'baseAssetPrecision'))
+            precisionAmount = self.parse_number(self.parse_precision(self.safe_string(market, 'baseAssetPrecision')))
             limitAmount = {
                 'min': None,
                 'max': None,
@@ -331,13 +484,13 @@ class currencycom(Exchange):
                 'swap': False,
                 'future': False,
                 'option': False,
+                'active': active,
                 'contract': False,
                 'linear': None,
                 'inverse': None,
-                'taker': taker,
-                'maker': maker,
+                'taker': self.parse_number(taker),
+                'maker': self.parse_number(maker),
                 'contractSize': None,
-                'active': active,
                 'expiry': None,
                 'expiryDatetime': None,
                 'strike': None,
@@ -367,26 +520,35 @@ class currencycom(Exchange):
         return result
 
     def fetch_accounts(self, params={}):
-        response = self.privateGetAccount(params)
+        response = self.privateGetV2Account(params)
         #
         #     {
-        #         "makerCommission":0.20,
-        #         "takerCommission":0.20,
-        #         "buyerCommission":0.20,
-        #         "sellerCommission":0.20,
-        #         "canTrade":true,
-        #         "canWithdraw":true,
-        #         "canDeposit":true,
-        #         "updateTime":1591056268,
-        #         "balances":[
+        #         "makerCommission": "0.20",
+        #         "takerCommission": "0.20",
+        #         "buyerCommission": "0.20",
+        #         "sellerCommission": "0.20",
+        #         "canTrade": True,
+        #         "canWithdraw": True,
+        #         "canDeposit": True,
+        #         "updateTime": "1645266330",
+        #         "userId": "644722",
+        #         "balances": [
         #             {
-        #                 "accountId":5470306579272968,
-        #                 "collateralCurrency":true,
-        #                 "asset":"ETH",
-        #                 "free":0.0,
-        #                 "locked":0.0,
-        #                 "default":false,
+        #                 "accountId": "120702016179403605",
+        #                 "collateralCurrency": False,
+        #                 "asset": "CAKE",
+        #                 "free": "1.784",
+        #                 "locked": "0.0",
+        #                 "default": False,
         #             },
+        #             {
+        #                 "accountId": "109698017713125316",
+        #                 "collateralCurrency": True,
+        #                 "asset": "USD",
+        #                 "free": "7.58632",
+        #                 "locked": "0.0",
+        #                 "default": True,
+        #             }
         #         ]
         #     }
         #
@@ -407,7 +569,7 @@ class currencycom(Exchange):
 
     def fetch_trading_fees(self, params={}):
         self.load_markets()
-        response = self.privateGetAccount(params)
+        response = self.privateGetV2Account(params)
         return {
             'info': response,
             'maker': self.safe_number(response, 'makerCommission'),
@@ -427,7 +589,7 @@ class currencycom(Exchange):
         #         "updateTime":1591056268,
         #         "balances":[
         #             {
-        #                 "accountId":5470306579272968,
+        #                 "accountId":5470306579272368,
         #                 "collateralCurrency":true,
         #                 "asset":"ETH",
         #                 "free":0.0,
@@ -451,26 +613,35 @@ class currencycom(Exchange):
 
     def fetch_balance(self, params={}):
         self.load_markets()
-        response = self.privateGetAccount(params)
+        response = self.privateGetV2Account(params)
         #
         #     {
-        #         "makerCommission":0.20,
-        #         "takerCommission":0.20,
-        #         "buyerCommission":0.20,
-        #         "sellerCommission":0.20,
-        #         "canTrade":true,
-        #         "canWithdraw":true,
-        #         "canDeposit":true,
-        #         "updateTime":1591056268,
-        #         "balances":[
+        #         "makerCommission": "0.20",
+        #         "takerCommission": "0.20",
+        #         "buyerCommission": "0.20",
+        #         "sellerCommission": "0.20",
+        #         "canTrade": True,
+        #         "canWithdraw": True,
+        #         "canDeposit": True,
+        #         "updateTime": "1645266330",
+        #         "userId": "644722",
+        #         "balances": [
         #             {
-        #                 "accountId":5470306579272968,
-        #                 "collateralCurrency":true,
-        #                 "asset":"ETH",
-        #                 "free":0.0,
-        #                 "locked":0.0,
-        #                 "default":false,
+        #                 "accountId": "120702016179403605",
+        #                 "collateralCurrency": False,
+        #                 "asset": "CAKE",
+        #                 "free": "1.784",
+        #                 "locked": "0.0",
+        #                 "default": False,
         #             },
+        #             {
+        #                 "accountId": "109698017413175316",
+        #                 "collateralCurrency": True,
+        #                 "asset": "USD",
+        #                 "free": "7.58632",
+        #                 "locked": "0.0",
+        #                 "default": True,
+        #             }
         #         ]
         #     }
         #
@@ -484,19 +655,19 @@ class currencycom(Exchange):
         }
         if limit is not None:
             request['limit'] = limit  # default 100, max 1000, valid limits 5, 10, 20, 50, 100, 500, 1000, 5000
-        response = self.publicGetDepth(self.extend(request, params))
+        response = self.publicGetV2Depth(self.extend(request, params))
         #
         #     {
         #         "lastUpdateId":1590999849037,
         #         "asks":[
-        #             [0.02495,60.0000],
-        #             [0.02496,120.0000],
-        #             [0.02497,240.0000],
+        #             [0.02495,60.0345],
+        #             [0.02496,34.1],
+        #             ...
         #         ],
         #         "bids":[
-        #             [0.02487,60.0000],
-        #             [0.02486,120.0000],
-        #             [0.02485,240.0000],
+        #             [0.02487,72.4144854],
+        #             [0.02486,24.043],
+        #             ...
         #         ]
         #     }
         #
@@ -530,32 +701,47 @@ class currencycom(Exchange):
         # fetchTickers
         #
         #     {
-        #         "symbol":"EVK",
-        #         "highPrice":"22.57",
-        #         "lowPrice":"22.16",
-        #         "volume":"1",
-        #         "quoteVolume":"22.2",
-        #         "openTime":1590699364000,
-        #         "closeTime":1590785764000
+        #          "symbol": "SHIB/USD_LEVERAGE",
+        #          "weightedAvgPrice": "0.000027595",
+        #          "lastPrice": "0.00002737",
+        #          "lastQty": "1.11111111E8",
+        #          "bidPrice": "0.00002737",
+        #          "askPrice": "0.00002782",
+        #          "highPrice": "0.00002896",
+        #          "lowPrice": "0.00002738",
+        #          "volume": "16472160000",
+        #          "quoteVolume": "454796.3376",
+        #          "openTime": "1645187472000",
+        #          "closeTime": "1645273872000",
         #     }
         #
-        timestamp = self.safe_integer(ticker, 'closeTime')
-        marketId = self.safe_string(ticker, 'symbol')
+        # ws:marketData.subscribe
+        #
+        #     {
+        #          "symbolName":"TXN",
+        #          "bid":139.85,
+        #          "bidQty":2500,
+        #          "ofr":139.92000000000002,
+        #          "ofrQty":2500,
+        #          "timestamp":1597850971558
+        #      }
+        #
+        timestamp = self.safe_integer_2(ticker, 'closeTime', 'timestamp')
+        marketId = self.safe_string_2(ticker, 'symbol', 'symbolName')
         market = self.safe_market(marketId, market, '/')
         last = self.safe_string(ticker, 'lastPrice')
-        open = self.safe_string(ticker, 'openPrice')
         return self.safe_ticker({
             'symbol': market['symbol'],
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'high': self.safe_string(ticker, 'highPrice'),
             'low': self.safe_string(ticker, 'lowPrice'),
-            'bid': self.safe_string(ticker, 'bidPrice'),
+            'bid': self.safe_string_2(ticker, 'bidPrice', 'bid'),
             'bidVolume': self.safe_string(ticker, 'bidQty'),
-            'ask': self.safe_string(ticker, 'askPrice'),
-            'askVolume': self.safe_string(ticker, 'askQty'),
+            'ask': self.safe_string_2(ticker, 'askPrice', 'ofr'),
+            'askVolume': self.safe_string(ticker, 'ofrQty'),
             'vwap': self.safe_string(ticker, 'weightedAvgPrice'),
-            'open': open,
+            'open': self.safe_string(ticker, 'openPrice'),
             'close': last,
             'last': last,
             'previousClose': self.safe_string(ticker, 'prevClosePrice'),  # previous day close
@@ -573,7 +759,7 @@ class currencycom(Exchange):
         request = {
             'symbol': market['id'],
         }
-        response = self.publicGetTicker24hr(self.extend(request, params))
+        response = self.publicGetV2Ticker24hr(self.extend(request, params))
         #
         #     {
         #         "symbol":"ETH/BTC",
@@ -598,17 +784,22 @@ class currencycom(Exchange):
 
     def fetch_tickers(self, symbols=None, params={}):
         self.load_markets()
-        response = self.publicGetTicker24hr(params)
+        response = self.publicGetV2Ticker24hr(params)
         #
         #     [
         #         {
-        #             "symbol":"EVK",
-        #             "highPrice":"22.57",
-        #             "lowPrice":"22.16",
-        #             "volume":"1",
-        #             "quoteVolume":"22.2",
-        #             "openTime":1590699364000,
-        #             "closeTime":1590785764000
+        #              "symbol": "SHIB/USD_LEVERAGE",
+        #              "weightedAvgPrice": "0.000027595",
+        #              "lastPrice": "0.00002737",
+        #              "lastQty": "1.11111111E8",
+        #              "bidPrice": "0.00002737",
+        #              "askPrice": "0.00002782",
+        #              "highPrice": "0.00002896",
+        #              "lowPrice": "0.00002738",
+        #              "volume": "16472160000",
+        #              "quoteVolume": "454796.3376",
+        #              "openTime": "1645187472000",
+        #              "closeTime": "1645273872000",
         #         }
         #     ]
         #
@@ -645,7 +836,7 @@ class currencycom(Exchange):
             request['startTime'] = since
         if limit is not None:
             request['limit'] = limit  # default 500, max 1000
-        response = self.publicGetKlines(self.extend(request, params))
+        response = self.publicGetV2Klines(self.extend(request, params))
         #
         #     [
         #         [1590971040000,"0.02454","0.02456","0.02452","0.02456",249],
@@ -660,11 +851,11 @@ class currencycom(Exchange):
         # fetchTrades(public aggregate trades)
         #
         #     {
-        #         "a":1658318071,
-        #         "p":"0.02476",
-        #         "q":"0.0",
-        #         "T":1591001423382,
-        #         "m":false
+        #         "a":"1658318071",    # Aggregate tradeId
+        #         "p":"0.02476",       # Price
+        #         "q":"0.0",           # Official doc says: "Quantity(should be ignored)"
+        #         "T":"1591001423382",  # Epoch timestamp in MS
+        #         "m":false            # Was the buyer the maker
         #     }
         #
         # createOrder fills(private)
@@ -679,17 +870,18 @@ class currencycom(Exchange):
         # fetchMyTrades
         #
         #     {
-        #         "symbol": "BNBBTC",
-        #         "id": 28457,
-        #         "orderId": 100234,
-        #         "price": "4.00000100",
-        #         "qty": "12.00000000",
-        #         "commission": "10.10000000",
-        #         "commissionAsset": "BNB",
-        #         "time": 1499865549590,
-        #         "isBuyer": True,
-        #         "isMaker": False,
-        #         "isBestMatch": True
+        #         "symbol": "DOGE/USD",
+        #         "id": "116046000",
+        #         "orderId": "00000000-0000-0000-0000-000006dbb8ad",
+        #         "price": "0.14094",
+        #         "qty": "40.0",
+        #         "commission": "0.01",
+        #         "commissionAsset": "USD",
+        #         "time": "1645283022351",
+        #         "buyer": False,
+        #         "maker": False,
+        #         "isBuyer": False,
+        #         "isMaker": False
         #     }
         #
         timestamp = self.safe_integer_2(trade, 'T', 'time')
@@ -741,17 +933,19 @@ class currencycom(Exchange):
         }
         if limit is not None:
             request['limit'] = limit  # default 500, max 1000
-        response = self.publicGetAggTrades(self.extend(request, params))
+        if since is not None:
+            request['startTime'] = since
+        response = self.publicGetV2AggTrades(self.extend(request, params))
         #
-        #     [
-        #         {
-        #             "a":1658318071,
-        #             "p":"0.02476",
-        #             "q":"0.0",
-        #             "T":1591001423382,
-        #             "m":false
-        #         }
-        #     ]
+        # [
+        #     {
+        #         "a":"1658318071",    # Aggregate tradeId
+        #         "p":"0.02476",       # Price
+        #         "q":"0.0",           # Official doc says: "Quantity(should be ignored)"
+        #         "T":"1591001423382",  # Epoch timestamp in MS
+        #         "m":false            # Was the buyer the maker
+        #     },
+        # ]
         #
         return self.parse_trades(response, market, since, limit)
 
@@ -852,33 +1046,49 @@ class currencycom(Exchange):
             # 'stopLoss': '54.321'
             # 'guaranteedStopLoss': '54.321',
         }
-        if uppercaseType == 'LIMIT':
+        if type == 'limit':
             request['price'] = self.price_to_precision(symbol, price)
             request['timeInForce'] = self.options['defaultTimeInForce']  # 'GTC' = Good To Cancel(default), 'IOC' = Immediate Or Cancel, 'FOK' = Fill Or Kill
-        elif uppercaseType == 'STOP':
+        elif type == 'stop':
             request['price'] = self.price_to_precision(symbol, price)
-        response = self.privatePostOrder(self.extend(request, params))
+        response = self.privatePostV2Order(self.extend(request, params))
+        #
+        # limit
         #
         #     {
         #         "symbol": "BTC/USD",
-        #         "orderId": "00000000-0000-0000-0000-0000000c0263",
-        #         "clientOrderId": "00000000-0000-0000-0000-0000000c0263",
-        #         "transactTime": 1589878206426,
-        #         "price": "9825.66210000",
-        #         "origQty": "0.01",
-        #         "executedQty": "0.01",
+        #         "orderId": "00000000-0000-0000-0000-000006eaaaa0",
+        #         "transactTime": "1645281669295",
+        #         "price": "30000.00000000",
+        #         "origQty": "0.0002",
+        #         "executedQty": "0.0",  #positive for BUY, negative for SELL
+        #         "status": "NEW",
+        #         "timeInForce": "GTC",
+        #         "type": "LIMIT",
+        #         "side": "BUY",
+        #     }
+        #
+        # market
+        #
+        #     {
+        #         "symbol": "DOGE/USD",
+        #         "orderId": "00000000-0000-0000-0000-000006eab8ad",
+        #         "transactTime": "1645283022252",
+        #         "price": "0.14066000",
+        #         "origQty": "40",
+        #         "executedQty": "40.0",  #positive for BUY, negative for SELL
         #         "status": "FILLED",
         #         "timeInForce": "FOK",
         #         "type": "MARKET",
-        #         "side": "BUY",
+        #         "side": "SELL",
         #         "fills": [
         #             {
-        #                 "price": "9807.05",
-        #                 "qty": "0.01",
+        #                 "price": "0.14094",
+        #                 "qty": "40.0",
         #                 "commission": "0",
-        #                 "commissionAsset": "dUSD"
-        #             }
-        #         ]
+        #                 "commissionAsset": "dUSD",
+        #             },
+        #         ],
         #     }
         #
         return self.parse_order(response, market)
@@ -895,7 +1105,26 @@ class currencycom(Exchange):
             numSymbols = len(symbols)
             fetchOpenOrdersRateLimit = int(numSymbols / 2)
             raise ExchangeError(self.id + ' fetchOpenOrders() WARNING: fetching open orders without specifying a symbol is rate-limited to one call per ' + str(fetchOpenOrdersRateLimit) + ' seconds. Do not call self method frequently to avoid ban. Set ' + self.id + '.options["warnOnFetchOpenOrdersWithoutSymbol"] = False to suppress self warning message.')
-        response = self.privateGetOpenOrders(self.extend(request, params))
+        response = self.privateGetV2OpenOrders(self.extend(request, params))
+        #
+        #     [
+        #         {
+        #             "symbol": "DOGE/USD",
+        #             "orderId": "00000000-0000-0003-0000-000004bac57a",
+        #             "price": "0.13",
+        #             "origQty": "39.0",
+        #             "executedQty": "0.0",
+        #             "status": "NEW",
+        #             "timeInForce": "GTC",
+        #             "type": "LIMIT",
+        #             "side": "BUY",
+        #             "time": "1645284216240",
+        #             "updateTime": "1645284216240",
+        #             "leverage": False,
+        #             "working": True
+        #         },
+        #     ]
+        #
         return self.parse_orders(response, market, since, limit)
 
     def cancel_order(self, id, symbol=None, params={}):
@@ -913,12 +1142,12 @@ class currencycom(Exchange):
             request['orderId'] = id
         else:
             request['origClientOrderId'] = origClientOrderId
-        response = self.privateDeleteOrder(self.extend(request, params))
+        response = self.privateDeleteV2Order(self.extend(request, params))
         #
         #     {
         #         "symbol":"ETH/USD",
         #         "orderId":"00000000-0000-0000-0000-00000024383b",
-        #         "clientOrderId":"00000000-0000-0000-0000-00000024383b",
+        #         "clientOrderId":"00000000-0000-0000-0000-00000024383b",  # self might not be present
         #         "price":"150",
         #         "origQty":"0.1",
         #         "executedQty":"0.0",
@@ -940,28 +1169,156 @@ class currencycom(Exchange):
         }
         if limit is not None:
             request['limit'] = limit
-        response = self.privateGetMyTrades(self.extend(request, params))
+        response = self.privateGetV2MyTrades(self.extend(request, params))
         #
         #     [
         #         {
-        #             "symbol": "BNBBTC",
-        #             "id": 28457,
-        #             "orderId": 100234,
-        #             "price": "4.00000100",
-        #             "qty": "12.00000000",
-        #             "commission": "10.10000000",
-        #             "commissionAsset": "BNB",
-        #             "time": 1499865549590,
-        #             "isBuyer": True,
-        #             "isMaker": False,
-        #             "isBestMatch": True
-        #         }
+        #             "symbol": "DOGE/USD",
+        #             "id": "116046000",
+        #             "orderId": "00000000-0000-0000-0000-000006dbb8ad",
+        #             "price": "0.14094",
+        #             "qty": "40.0",
+        #             "commission": "0.01",
+        #             "commissionAsset": "USD",
+        #             "time": "1645283022351",
+        #             "buyer": False,
+        #             "maker": False,
+        #             "isBuyer": False,
+        #             "isMaker": False
+        #         },
         #     ]
         #
         return self.parse_trades(response, market, since, limit)
 
+    def fetch_deposits(self, code=None, since=None, limit=None, params={}):
+        return self.fetch_transactions_by_method('privateGetV2Deposits', code, since, limit, params)
+
+    def fetch_withdrawals(self, code=None, since=None, limit=None, params={}):
+        return self.fetch_transactions_by_method('privateGetV2Withdrawals', code, since, limit, params)
+
+    def fetch_transactions(self, code=None, since=None, limit=None, params={}):
+        return self.fetch_transactions_by_method('privateGetV2Transactions', code, since, limit, params)
+
+    def fetch_transactions_by_method(self, method, code=None, since=None, limit=None, params={}):
+        self.load_markets()
+        request = {}
+        currency = None
+        if code is not None:
+            currency = self.currency(code)
+        if since is not None:
+            request['startTime'] = since
+        if limit is not None:
+            request['limit'] = limit
+        response = getattr(self, method)(self.extend(request, params))
+        #
+        #     [
+        #       {
+        #         "id": "616769213",
+        #         "balance": "2.088",
+        #         "amount": "1.304",   # negative for 'withdrawal'
+        #         "currency": "CAKE",
+        #         "type": "deposit",
+        #         "timestamp": "1645282121023",
+        #         "paymentMethod": "BLOCKCHAIN",
+        #         "blockchainTransactionHash": "0x57c68c1f2ae74d5eda5a2a00516361d241a5c9e1ee95bf32573523857c38c112",
+        #         "status": "PROCESSED",
+        #         "commission": "0.14",  # self property only exists in withdrawal
+        #       },
+        #     ]
+        #
+        return self.parse_transactions(response, currency, since, limit, params)
+
+    def parse_transaction(self, transaction, currency=None):
+        id = self.safe_string(transaction, 'id')
+        txHash = self.safe_string(transaction, 'blockchainTransactionHash')
+        amount = self.safe_number(transaction, 'amount')
+        timestamp = self.safe_integer(transaction, 'timestamp')
+        currencyId = self.safe_string(transaction, 'currency')
+        code = self.safe_currency_code(currencyId, currency)
+        state = self.parse_transaction_status(self.safe_string(transaction, 'state'))
+        type = self.parse_transaction_type(self.safe_string(transaction, 'type'))
+        feeCost = self.safe_string(transaction, 'commission')
+        fee = None
+        if feeCost is not None:
+            fee = {'currency': code, 'cost': feeCost}
+        result = {
+            'id': id,
+            'txid': txHash,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+            'network': None,
+            'addressFrom': None,
+            'address': None,
+            'addressTo': None,
+            'tagFrom': None,
+            'tag': None,
+            'tagTo': None,
+            'type': type,
+            'amount': amount,
+            'currency': code,
+            'status': state,
+            'updated': None,
+            'comment': None,
+            'fee': fee,
+            'info': transaction,
+        }
+        return result
+
+    def parse_transaction_status(self, status):
+        statuses = {
+            'APPROVAL': 'pending',
+            'PROCESSED': 'ok',
+        }
+        return self.safe_string(statuses, status, status)
+
+    def parse_transaction_type(self, type):
+        types = {
+            'deposit': 'deposit',
+            'withdrawal': 'withdrawal',
+        }
+        return self.safe_string(types, type, type)
+
+    def fetch_leverage(self, symbol, params={}):
+        self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'symbol': market['id'],
+        }
+        response = self.privateGetV2LeverageSettings(self.extend(request, params))
+        #
+        # {
+        #     "values": [1, 2, 5, 10,],
+        #     "value": "10",
+        # }
+        #
+        return self.safe_number(response, 'value')
+
+    def fetch_deposit_address(self, code, params={}):
+        self.load_markets()
+        currency = self.currency(code)
+        request = {
+            'coin': currency['id'],
+        }
+        response = self.privateGetV2DepositAddress(self.extend(request, params))
+        #
+        #     {"address":"0x97d64eb014ac779194991e7264f01c74c90327f0"}
+        #
+        return self.parse_deposit_address(response, currency)
+
+    def parse_deposit_address(self, depositAddress, currency=None):
+        address = self.safe_string(depositAddress, 'address')
+        self.check_address(address)
+        currency = self.safe_currency(None, currency)
+        return {
+            'currency': currency['code'],
+            'address': address,
+            'tag': None,
+            'network': None,
+            'info': depositAddress,
+        }
+
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
-        url = self.urls['api'][api] + '/' + self.version + '/' + path
+        url = self.urls['api'][api] + '/' + path
         if path == 'historicalTrades':
             headers = {
                 'X-MBX-APIKEY': self.apiKey,

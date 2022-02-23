@@ -18,15 +18,45 @@ class coincheck extends Exchange {
             'countries' => array( 'JP', 'ID' ),
             'rateLimit' => 1500,
             'has' => array(
-                'cancelOrder' => true,
                 'CORS' => null,
+                'spot' => true,
+                'margin' => false,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
+                'addMargin' => false,
+                'cancelOrder' => true,
                 'createOrder' => true,
+                'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
+                'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
+                'fetchBorrowRateHistory' => false,
+                'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
+                'fetchDeposits' => true,
+                'fetchFundingHistory' => false,
+                'fetchFundingRate' => false,
+                'fetchFundingRateHistory' => false,
+                'fetchFundingRates' => false,
+                'fetchIndexOHLCV' => false,
+                'fetchIsolatedPositions' => false,
+                'fetchLeverage' => false,
+                'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
                 'fetchOpenOrders' => true,
                 'fetchOrderBook' => true,
+                'fetchPosition' => false,
+                'fetchPositions' => false,
+                'fetchPositionsRisk' => false,
+                'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTrades' => true,
+                'fetchWithdrawals' => true,
+                'reduceMargin' => false,
+                'setLeverage' => false,
+                'setMarginMode' => false,
+                'setPositionMode' => false,
             ),
             'urls' => array(
                 'logo' => 'https://user-images.githubusercontent.com/51840849/87182088-1d6d6380-c2ec-11ea-9c64-8ab9f9b289f5.jpg',
@@ -226,6 +256,45 @@ class coincheck extends Exchange {
         return $this->parse_order_book($response, $symbol);
     }
 
+    public function parse_ticker($ticker, $market = null) {
+        //
+        // {
+        //     "last":4192632.0,
+        //     "bid":4192496.0,
+        //     "ask":4193749.0,
+        //     "high":4332000.0,
+        //     "low":4101047.0,
+        //     "volume":2313.43191762,
+        //     "timestamp":1643374115
+        // }
+        //
+        $symbol = $this->safe_symbol(null, $market);
+        $timestamp = $this->safe_timestamp($ticker, 'timestamp');
+        $last = $this->safe_string($ticker, 'last');
+        return $this->safe_ticker(array(
+            'symbol' => $symbol,
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601($timestamp),
+            'high' => $this->safe_string($ticker, 'high'),
+            'low' => $this->safe_string($ticker, 'low'),
+            'bid' => $this->safe_string($ticker, 'bid'),
+            'bidVolume' => null,
+            'ask' => $this->safe_string($ticker, 'ask'),
+            'askVolume' => null,
+            'vwap' => null,
+            'open' => null,
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
+            'change' => null,
+            'percentage' => null,
+            'average' => null,
+            'baseVolume' => $this->safe_string($ticker, 'volume'),
+            'quoteVolume' => null,
+            'info' => $ticker,
+        ), $market, false);
+    }
+
     public function fetch_ticker($symbol, $params = array ()) {
         if ($symbol !== 'BTC/JPY') {
             throw new BadSymbol($this->id . ' fetchTicker () supports BTC/JPY only');
@@ -236,30 +305,18 @@ class coincheck extends Exchange {
             'pair' => $market['id'],
         );
         $ticker = $this->publicGetTicker (array_merge($request, $params));
-        $timestamp = $this->safe_timestamp($ticker, 'timestamp');
-        $last = $this->safe_number($ticker, 'last');
-        return array(
-            'symbol' => $symbol,
-            'timestamp' => $timestamp,
-            'datetime' => $this->iso8601($timestamp),
-            'high' => $this->safe_number($ticker, 'high'),
-            'low' => $this->safe_number($ticker, 'low'),
-            'bid' => $this->safe_number($ticker, 'bid'),
-            'bidVolume' => null,
-            'ask' => $this->safe_number($ticker, 'ask'),
-            'askVolume' => null,
-            'vwap' => null,
-            'open' => null,
-            'close' => $last,
-            'last' => $last,
-            'previousClose' => null,
-            'change' => null,
-            'percentage' => null,
-            'average' => null,
-            'baseVolume' => $this->safe_number($ticker, 'volume'),
-            'quoteVolume' => null,
-            'info' => $ticker,
-        );
+        //
+        // {
+        //     "last":4192632.0,
+        //     "bid":4192496.0,
+        //     "ask":4193749.0,
+        //     "high":4332000.0,
+        //     "low":4101047.0,
+        //     "volume":2313.43191762,
+        //     "timestamp":1643374115
+        // }
+        //
+        return $this->parse_ticker($ticker, $market);
     }
 
     public function parse_trade($trade, $market = null) {
@@ -317,9 +374,7 @@ class coincheck extends Exchange {
             }
         }
         if ($symbol === null) {
-            if ($market !== null) {
-                $symbol = $market['symbol'];
-            }
+            $symbol = $this->safe_symbol(null, $market);
         }
         $takerOrMaker = null;
         $amountString = null;
@@ -366,7 +421,11 @@ class coincheck extends Exchange {
     public function fetch_my_trades($symbol = null, $since = null, $limit = null, $params = array ()) {
         $this->load_markets();
         $market = $this->market($symbol);
-        $response = $this->privateGetExchangeOrdersTransactions (array_merge(array(), $params));
+        $request = array();
+        if ($limit !== null) {
+            $request['limit'] = $limit;
+        }
+        $response = $this->privateGetExchangeOrdersTransactionsPagination (array_merge($request, $params));
         //
         //      {
         //          "success" => true,
@@ -445,6 +504,161 @@ class coincheck extends Exchange {
             'id' => $id,
         );
         return $this->privateDeleteExchangeOrdersId (array_merge($request, $params));
+    }
+
+    public function fetch_deposits($code = null, $since = null, $limit = null, $params = array ()) {
+        $this->load_markets();
+        $currency = null;
+        $request = array();
+        if ($code !== null) {
+            $currency = $this->currency($code);
+            $request['currency'] = $currency['id'];
+        }
+        if ($limit !== null) {
+            $request['limit'] = $limit;
+        }
+        $response = $this->privateGetDepositMoney (array_merge($request, $params));
+        // {
+        //   "success" => true,
+        //   "deposits" => array(
+        //     array(
+        //       "id" => 2,
+        //       "amount" => "0.05",
+        //       "currency" => "BTC",
+        //       "address" => "13PhzoK8me3u5nHzzFD85qT9RqEWR9M4Ty",
+        //       "status" => "confirmed",
+        //       "confirmed_at" => "2015-06-13T08:29:18.000Z",
+        //       "created_at" => "2015-06-13T08:22:18.000Z"
+        //     ),
+        //     {
+        //       "id" => 1,
+        //       "amount" => "0.01",
+        //       "currency" => "BTC",
+        //       "address" => "13PhzoK8me3u5nHzzFD85qT9RqEWR9M4Ty",
+        //       "status" => "received",
+        //       "confirmed_at" => "2015-06-13T08:21:18.000Z",
+        //       "created_at" => "2015-06-13T08:21:18.000Z"
+        //     }
+        //   )
+        // }
+        $data = $this->safe_value($response, 'deposits', array());
+        return $this->parse_transactions($data, $currency, $since, $limit, array( 'type' => 'deposit' ));
+    }
+
+    public function fetch_withdrawals($code = null, $since = null, $limit = null, $params = array ()) {
+        $this->load_markets();
+        $currency = null;
+        if ($code !== null) {
+            $currency = $this->currency($code);
+        }
+        $request = array();
+        if ($limit !== null) {
+            $request['limit'] = $limit;
+        }
+        $response = $this->privateGetWithdraws (array_merge($request, $params));
+        //  {
+        //   "success" => true,
+        //   "pagination" => array(
+        //     "limit" => 25,
+        //     "order" => "desc",
+        //     "starting_after" => null,
+        //     "ending_before" => null
+        //   ),
+        //   "data" => array(
+        //     {
+        //       "id" => 398,
+        //       "status" => "finished",
+        //       "amount" => "242742.0",
+        //       "currency" => "JPY",
+        //       "created_at" => "2014-12-04T15:00:00.000Z",
+        //       "bank_account_id" => 243,
+        //       "fee" => "400.0",
+        //       "is_fast" => true
+        //     }
+        //   )
+        // }
+        $data = $this->safe_value($response, 'data', array());
+        return $this->parse_transactions($data, $currency, $since, $limit, array( 'type' => 'withdrawal' ));
+    }
+
+    public function parse_transaction_status($status) {
+        $statuses = array(
+            // withdrawals
+            'pending' => 'pending',
+            'processing' => 'pending',
+            'finished' => 'ok',
+            'canceled' => 'canceled',
+            // deposits
+            'confirmed' => 'pending',
+            'received' => 'ok',
+        );
+        return $this->safe_string($statuses, $status, $status);
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        // fetchDeposits
+        //
+        // {
+        //       "id" => 2,
+        //       "amount" => "0.05",
+        //       "currency" => "BTC",
+        //       "address" => "13PhzoK8me3u5nHzzFD85qT9RqEWR9M4Ty",
+        //       "status" => "confirmed",
+        //       "confirmed_at" => "2015-06-13T08:29:18.000Z",
+        //       "created_at" => "2015-06-13T08:22:18.000Z"
+        //  }
+        //
+        // fetchWithdrawals
+        //
+        //  {
+        //       "id" => 398,
+        //       "status" => "finished",
+        //       "amount" => "242742.0",
+        //       "currency" => "JPY",
+        //       "created_at" => "2014-12-04T15:00:00.000Z",
+        //       "bank_account_id" => 243,
+        //       "fee" => "400.0",
+        //       "is_fast" => true
+        //  }
+        //
+        $id = $this->safe_string($transaction, 'id');
+        $timestamp = $this->parse8601($this->safe_string($transaction, 'created_at'));
+        $address = $this->safe_string($transaction, 'address');
+        $amount = $this->safe_number($transaction, 'amount');
+        $currencyId = $this->safe_string($transaction, 'currency');
+        $code = $this->safe_currency_code($currencyId, $currency);
+        $status = $this->parse_transaction_status($this->safe_string($transaction, 'status'));
+        $updated = $this->parse8601($this->safe_string($transaction, 'confirmed_at'));
+        $fee = null;
+        $feeCost = $this->safe_number($transaction, 'fee');
+        if ($feeCost !== null) {
+            $fee = array(
+                'cost' => $feeCost,
+                'currency' => $code,
+            );
+        }
+        return array(
+            'info' => $transaction,
+            'id' => $id,
+            'txid' => null,
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601($timestamp),
+            'network' => null,
+            'address' => $address,
+            'addressTo' => $address,
+            'addressFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'tagFrom' => null,
+            'type' => null,
+            'amount' => $amount,
+            'currency' => $code,
+            'status' => $status,
+            'updated' => $updated,
+            'internal' => null,
+            'fee' => $fee,
+        );
     }
 
     public function nonce() {

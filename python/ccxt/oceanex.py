@@ -31,13 +31,23 @@ class oceanex(Exchange):
                 'referral': 'https://oceanex.pro/signup?referral=VE24QX',
             },
             'has': {
+                'CORS': None,
+                'spot': True,
+                'margin': False,
+                'swap': None,  # has but unimplemented
+                'future': None,
+                'option': None,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
                 'cancelOrders': True,
                 'createMarketOrder': True,
                 'createOrder': True,
-                'fetchAllTradingFees': True,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchClosedOrders': True,
                 'fetchFundingFees': None,
                 'fetchMarkets': True,
@@ -51,7 +61,8 @@ class oceanex(Exchange):
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
-                'fetchTradingFees': None,
+                'fetchTradingFee': None,
+                'fetchTradingFees': True,
                 'fetchTradingLimits': None,
             },
             'timeframes': {
@@ -138,6 +149,19 @@ class oceanex(Exchange):
     def fetch_markets(self, params={}):
         request = {'show_details': True}
         response = self.publicGetMarkets(self.extend(request, params))
+        #
+        #    {
+        #        id: 'xtzusdt',
+        #        name: 'XTZ/USDT',
+        #        ask_precision: '8',
+        #        bid_precision: '8',
+        #        enabled: True,
+        #        price_precision: '4',
+        #        amount_precision: '3',
+        #        usd_precision: '4',
+        #        minimum_trading_amount: '1.0'
+        #    },
+        #
         result = []
         markets = self.safe_value(response, 'data')
         for i in range(0, len(markets)):
@@ -155,26 +179,25 @@ class oceanex(Exchange):
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
                 'margin': False,
-                'future': False,
                 'swap': False,
+                'future': False,
                 'option': False,
-                'optionType': None,
-                'strike': None,
+                'active': None,
+                'contract': False,
                 'linear': None,
                 'inverse': None,
-                'contract': False,
                 'contractSize': None,
-                'settle': None,
-                'settleId': None,
                 'expiry': None,
                 'expiryDatetime': None,
-                'active': None,
-                'info': market,
+                'strike': None,
+                'optionType': None,
                 'precision': {
                     'amount': self.safe_integer(market, 'amount_precision'),
                     'price': self.safe_integer(market, 'price_precision'),
@@ -182,6 +205,10 @@ class oceanex(Exchange):
                     'quote': self.safe_integer(market, 'bid_precision'),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': None,
                         'max': None,
@@ -195,6 +222,7 @@ class oceanex(Exchange):
                         'max': None,
                     },
                 },
+                'info': market,
             })
         return result
 
@@ -421,7 +449,7 @@ class oceanex(Exchange):
         #
         return self.safe_timestamp(response, 'data')
 
-    def fetch_all_trading_fees(self, params={}):
+    def fetch_trading_fees(self, params={}):
         response = self.publicGetFeesTrading(params)
         data = self.safe_value(response, 'data')
         result = {}

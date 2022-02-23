@@ -29,6 +29,7 @@ class stex(Exchange):
             'certified': False,
             # new metainfo interface
             'has': {
+                'CORS': None,
                 'spot': True,
                 'margin': False,
                 'swap': False,
@@ -37,13 +38,13 @@ class stex(Exchange):
                 'addMargin': False,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
-                'CORS': None,
                 'createDepositAddress': True,
                 'createMarketOrder': None,  # limit orders only
                 'createOrder': True,
                 'createReduceOnlyOrder': False,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
@@ -59,6 +60,7 @@ class stex(Exchange):
                 'fetchIndexOHLCV': False,
                 'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
@@ -343,7 +345,10 @@ class stex(Exchange):
                 'fee': fee,
                 'precision': int(precision),
                 'limits': {
-                    'amount': {'min': self.parse_number(amountLimit), 'max': None},
+                    'amount': {
+                        'min': self.parse_number(amountLimit),
+                        'max': None,
+                    },
                     'deposit': {
                         'min': self.safe_number(currency, 'minimum_deposit_amount'),
                         'max': None,
@@ -438,8 +443,8 @@ class stex(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(market, 'market_precision'),
                     'amount': self.safe_integer(market, 'currency_precision'),
+                    'price': self.safe_integer(market, 'market_precision'),
                 },
                 'limits': {
                     'leverage': {

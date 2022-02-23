@@ -21,6 +21,7 @@ class vcc extends Exchange {
             'rateLimit' => 1000,
             'version' => 'v3',
             'has' => array(
+                'CORS' => null,
                 'spot' => true,
                 'margin' => false,
                 'swap' => false,
@@ -34,6 +35,7 @@ class vcc extends Exchange {
                 'editOrder' => null,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -48,6 +50,7 @@ class vcc extends Exchange {
                 'fetchIndexOHLCV' => false,
                 'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
@@ -236,8 +239,8 @@ class vcc extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($precision, 'price'),
                     'amount' => $this->safe_integer($precision, 'amount'),
+                    'price' => $this->safe_integer($precision, 'price'),
                     'cost' => $this->safe_integer($precision, 'cost'),
                 ),
                 'limits' => array(

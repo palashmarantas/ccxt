@@ -21,29 +21,91 @@ class currencycom extends Exchange {
             'rateLimit' => 500,
             'certified' => true,
             'pro' => true,
-            'version' => 'v1',
+            'version' => 'v2',
             // new metainfo interface
             'has' => array(
-                'cancelOrder' => true,
                 'CORS' => null,
+                'spot' => true,
+                'margin' => true,
+                'swap' => true,
+                'future' => false,
+                'option' => false,
+                'addMargin' => null,
+                'cancelAllOrders' => null,
+                'cancelOrder' => true,
+                'cancelOrders' => null,
+                'createDepositAddress' => null,
+                'createLimitOrder' => true,
+                'createMarketOrder' => true,
                 'createOrder' => true,
+                'deposit' => null,
+                'editOrder' => 'emulated',
                 'fetchAccounts' => true,
                 'fetchBalance' => true,
+                'fetchBidsAsks' => null,
+                'fetchBorrowRate' => null,
+                'fetchBorrowRateHistory' => null,
+                'fetchBorrowRates' => null,
+                'fetchBorrowRatesPerSymbol' => null,
+                'fetchCanceledOrders' => null,
+                'fetchClosedOrder' => null,
+                'fetchClosedOrders' => null,
+                'fetchCurrencies' => true,
+                'fetchDeposit' => null,
+                'fetchDepositAddress' => true,
+                'fetchDepositAddresses' => false,
+                'fetchDepositAddressesByNetwork' => false,
+                'fetchDeposits' => true,
+                'fetchFundingFee' => null,
+                'fetchFundingFees' => null,
+                'fetchFundingHistory' => false,
+                'fetchFundingRate' => false,
+                'fetchFundingRateHistory' => false,
+                'fetchFundingRates' => false,
+                'fetchIndexOHLCV' => false,
+                'fetchL2OrderBook' => true,
+                'fetchLedger' => null,
+                'fetchLedgerEntry' => null,
+                'fetchLeverage' => true,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
+                'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
                 'fetchOHLCV' => true,
+                'fetchOpenOrder' => null,
                 'fetchOpenOrders' => true,
+                'fetchOrder' => null,
                 'fetchOrderBook' => true,
+                'fetchOrderBooks' => null,
+                'fetchOrders' => null,
+                'fetchOrderTrades' => null,
+                'fetchPosition' => null,
+                'fetchPositions' => null,
+                'fetchPositionsRisk' => null,
+                'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => null,
                 'fetchTradingFees' => true,
+                'fetchTradingLimits' => null,
+                'fetchTransactions' => true,
+                'fetchTransfers' => null,
+                'fetchWithdrawal' => null,
+                'fetchWithdrawals' => true,
+                'reduceMargin' => null,
+                'setLeverage' => null,
+                'setMarginMode' => null,
+                'setPositionMode' => null,
+                'signIn' => null,
+                'transfer' => null,
+                'withdraw' => null,
             ),
             'timeframes' => array(
                 '1m' => '1m',
-                '3m' => '3m',
                 '5m' => '5m',
+                '10m' => '10m',
                 '15m' => '15m',
                 '30m' => '30m',
                 '1h' => '1h',
@@ -71,30 +133,60 @@ class currencycom extends Exchange {
             'api' => array(
                 'public' => array(
                     'get' => array(
-                        'time',
-                        'exchangeInfo',
-                        'depth',
-                        'aggTrades',
-                        'klines',
-                        'ticker/24hr',
+                        'v1/time',
+                        'v2/time',
+                        'v1/exchangeInfo',
+                        'v2/exchangeInfo',
+                        'v1/depth',
+                        'v2/depth',
+                        'v1/aggTrades',
+                        'v2/aggTrades',
+                        'v1/klines',
+                        'v2/klines',
+                        'v1/ticker/24hr',
+                        'v2/ticker/24hr',
                     ),
                 ),
                 'private' => array(
                     'get' => array(
-                        'leverageSettings',
-                        'openOrders',
-                        'tradingPositions',
-                        'account',
-                        'myTrades',
+                        'v1/account',
+                        'v2/account',
+                        'v1/currencies',
+                        'v2/currencies',
+                        'v1/deposits',
+                        'v2/deposits',
+                        'v1/depositAddress',
+                        'v2/depositAddress',
+                        'v1/ledger',
+                        'v2/ledger',
+                        'v1/leverageSettings',
+                        'v2/leverageSettings',
+                        'v1/myTrades',
+                        'v2/myTrades',
+                        'v1/openOrders',
+                        'v2/openOrders',
+                        'v1/tradingPositions',
+                        'v2/tradingPositions',
+                        'v1/tradingPositionsHistory',
+                        'v2/tradingPositionsHistory',
+                        'v1/transactions',
+                        'v2/transactions',
+                        'v1/withdrawals',
+                        'v2/withdrawals',
                     ),
                     'post' => array(
-                        'order',
-                        'updateTradingPosition',
-                        'updateTradingOrder',
-                        'closeTradingPosition',
+                        'v1/order',
+                        'v2/order',
+                        'v1/updateTradingPosition',
+                        'v2/updateTradingPosition',
+                        'v1/updateTradingOrder',
+                        'v2/updateTradingOrder',
+                        'v1/closeTradingPosition',
+                        'v2/closeTradingPosition',
                     ),
                     'delete' => array(
-                        'order',
+                        'v1/order',
+                        'v2/order',
                     ),
                 ),
             ),
@@ -129,6 +221,7 @@ class currencycom extends Exchange {
                     'Order would trigger immediately.' => '\\ccxt\\InvalidOrder',
                     'Account has insufficient balance for requested action.' => '\\ccxt\\InsufficientFunds',
                     'Rest API trading is not enabled.' => '\\ccxt\\ExchangeNotAvailable',
+                    'Only leverage symbol allowed here:' => '\\ccxt\\BadSymbol', // when you fetchLeverage for non-leverage symbols, like 'BTC/USDT' instead of 'BTC/USDT_LEVERAGE' => array("code":"-1128","msg":"Only leverage symbol allowed here => BTC/USDT")
                 ),
                 'exact' => array(
                     '-1000' => '\\ccxt\\ExchangeNotAvailable', // array("code":-1000,"msg":"An unknown error occured while processing the request.")
@@ -150,11 +243,13 @@ class currencycom extends Exchange {
                 'ACN' => 'Accenture',
                 'BNS' => 'Bank of Nova Scotia',
                 'CAR' => 'Avis Budget Group Inc',
+                'CLR' => 'Continental Resources',
                 'EDU' => 'New Oriental Education & Technology Group Inc',
                 'ETN' => 'Eaton',
                 'FOX' => 'Fox Corporation',
                 'GM' => 'General Motors Co',
                 'IQ' => 'iQIYI',
+                'OSK' => 'Oshkosh',
                 'PLAY' => "Dave & Buster's Entertainment",
             ),
         ));
@@ -165,7 +260,7 @@ class currencycom extends Exchange {
     }
 
     public function fetch_time($params = array ()) {
-        $response = $this->publicGetTime ($params);
+        $response = $this->publicGetV2Time ($params);
         //
         //     {
         //         "serverTime" => 1590998366609
@@ -174,8 +269,74 @@ class currencycom extends Exchange {
         return $this->safe_integer($response, 'serverTime');
     }
 
+    public function fetch_currencies($params = array ()) {
+        // requires authentication
+        if (!$this->check_required_credentials(false)) {
+            return null;
+        }
+        $response = $this->privateGetV2Currencies ($params);
+        //
+        //     array(
+        //         array(
+        //           name => "US Dollar",
+        //           displaySymbol => "USD.cx",
+        //           $precision => "2",
+        //           type => "FIAT",
+        //           minWithdrawal => "100.0",
+        //           maxWithdrawal => "1.0E+8",
+        //           minDeposit => "100.0",
+        //         ),
+        //         array(
+        //             name => "Bitcoin",
+        //             displaySymbol => "BTC",
+        //             $precision => "8",
+        //             type => "CRYPTO",  // Note => only several major ones have this value. Others (like USDT) have value : "TOKEN"
+        //             minWithdrawal => "0.00020",
+        //             commissionFixed => "0.00010",
+        //             minDeposit => "0.00010",
+        //         ),
+        //     )
+        //
+        $result = array();
+        for ($i = 0; $i < count($response); $i++) {
+            $currency = $response[$i];
+            $id = $this->safe_string($currency, 'displaySymbol');
+            $code = $this->safe_currency_code($id);
+            $fee = $this->safe_number($currency, 'commissionFixed');
+            $precision = $this->safe_integer($currency, 'precision');
+            $result[$code] = array(
+                'id' => $id,
+                'code' => $code,
+                'address' => $this->safe_string($currency, 'baseAddress'),
+                'info' => $currency,
+                'type' => $this->safe_string_lower($currency, 'type'),
+                'name' => $this->safe_string($currency, 'name'),
+                'active' => null,
+                'deposit' => null,
+                'withdraw' => null,
+                'fee' => $fee,
+                'precision' => $precision,
+                'limits' => array(
+                    'amount' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
+                    'withdraw' => array(
+                        'min' => $this->safe_number($currency, 'minWithdrawal'),
+                        'max' => null,
+                    ),
+                    'deposit' => array(
+                        'min' => $this->safe_number($currency, 'minDeposit'),
+                        'max' => null,
+                    ),
+                ),
+            );
+        }
+        return $result;
+    }
+
     public function fetch_markets($params = array ()) {
-        $response = $this->publicGetExchangeInfo ($params);
+        $response = $this->publicGetV2ExchangeInfo ($params);
         //
         //     {
         //         "timezone":"UTC",
@@ -266,17 +427,9 @@ class currencycom extends Exchange {
             }
             $spot = ($type === 'spot');
             $margin = ($type === 'margin');
-            $exchangeFee = $this->safe_number_2($market, 'exchangeFee', 'tradingFee');
-            $makerFee = $this->safe_number($market, 'makerFee', $exchangeFee);
-            $takerFee = $this->safe_number($market, 'takerFee', $exchangeFee);
-            $maker = null;
-            $taker = null;
-            if ($makerFee !== null) {
-                $maker = $makerFee / 100;
-            }
-            if ($takerFee !== null) {
-                $taker = $takerFee / 100;
-            }
+            $exchangeFee = $this->safe_string_2($market, 'exchangeFee', 'tradingFee');
+            $maker = Precise::string_div($this->safe_string($market, 'makerFee', $exchangeFee), '100');
+            $taker = Precise::string_div($this->safe_string($market, 'takerFee', $exchangeFee), '100');
             $limitPriceMin = null;
             $limitPriceMax = null;
             $precisionPrice = $this->safe_number($market, 'tickSize');
@@ -293,7 +446,7 @@ class currencycom extends Exchange {
                     $limitPriceMax = $maxPrice;
                 }
             }
-            $precisionAmount = $this->parse_precision($this->safe_string($market, 'baseAssetPrecision'));
+            $precisionAmount = $this->parse_number($this->parse_precision($this->safe_string($market, 'baseAssetPrecision')));
             $limitAmount = array(
                 'min' => null,
                 'max' => null,
@@ -337,13 +490,13 @@ class currencycom extends Exchange {
                 'swap' => false,
                 'future' => false,
                 'option' => false,
+                'active' => $active,
                 'contract' => false,
                 'linear' => null,
                 'inverse' => null,
-                'taker' => $taker,
-                'maker' => $maker,
+                'taker' => $this->parse_number($taker),
+                'maker' => $this->parse_number($maker),
                 'contractSize' => null,
-                'active' => $active,
                 'expiry' => null,
                 'expiryDatetime' => null,
                 'strike' => null,
@@ -375,26 +528,35 @@ class currencycom extends Exchange {
     }
 
     public function fetch_accounts($params = array ()) {
-        $response = $this->privateGetAccount ($params);
+        $response = $this->privateGetV2Account ($params);
         //
         //     {
-        //         "makerCommission":0.20,
-        //         "takerCommission":0.20,
-        //         "buyerCommission":0.20,
-        //         "sellerCommission":0.20,
-        //         "canTrade":true,
-        //         "canWithdraw":true,
-        //         "canDeposit":true,
-        //         "updateTime":1591056268,
-        //         "balances":array(
+        //         "makerCommission" => "0.20",
+        //         "takerCommission" => "0.20",
+        //         "buyerCommission" => "0.20",
+        //         "sellerCommission" => "0.20",
+        //         "canTrade" => true,
+        //         "canWithdraw" => true,
+        //         "canDeposit" => true,
+        //         "updateTime" => "1645266330",
+        //         "userId" => "644722",
+        //         "balances" => array(
         //             array(
-        //                 "accountId":5470306579272968,
-        //                 "collateralCurrency":true,
-        //                 "asset":"ETH",
-        //                 "free":0.0,
-        //                 "locked":0.0,
-        //                 "default":false,
+        //                 "accountId" => "120702016179403605",
+        //                 "collateralCurrency" => false,
+        //                 "asset" => "CAKE",
+        //                 "free" => "1.784",
+        //                 "locked" => "0.0",
+        //                 "default" => false,
         //             ),
+        //             {
+        //                 "accountId" => "109698017713125316",
+        //                 "collateralCurrency" => true,
+        //                 "asset" => "USD",
+        //                 "free" => "7.58632",
+        //                 "locked" => "0.0",
+        //                 "default" => true,
+        //             }
         //         )
         //     }
         //
@@ -417,7 +579,7 @@ class currencycom extends Exchange {
 
     public function fetch_trading_fees($params = array ()) {
         $this->load_markets();
-        $response = $this->privateGetAccount ($params);
+        $response = $this->privateGetV2Account ($params);
         return array(
             'info' => $response,
             'maker' => $this->safe_number($response, 'makerCommission'),
@@ -438,7 +600,7 @@ class currencycom extends Exchange {
         //         "updateTime":1591056268,
         //         "balances":array(
         //             array(
-        //                 "accountId":5470306579272968,
+        //                 "accountId":5470306579272368,
         //                 "collateralCurrency":true,
         //                 "asset":"ETH",
         //                 "free":0.0,
@@ -464,26 +626,35 @@ class currencycom extends Exchange {
 
     public function fetch_balance($params = array ()) {
         $this->load_markets();
-        $response = $this->privateGetAccount ($params);
+        $response = $this->privateGetV2Account ($params);
         //
         //     {
-        //         "makerCommission":0.20,
-        //         "takerCommission":0.20,
-        //         "buyerCommission":0.20,
-        //         "sellerCommission":0.20,
-        //         "canTrade":true,
-        //         "canWithdraw":true,
-        //         "canDeposit":true,
-        //         "updateTime":1591056268,
-        //         "balances":array(
+        //         "makerCommission" => "0.20",
+        //         "takerCommission" => "0.20",
+        //         "buyerCommission" => "0.20",
+        //         "sellerCommission" => "0.20",
+        //         "canTrade" => true,
+        //         "canWithdraw" => true,
+        //         "canDeposit" => true,
+        //         "updateTime" => "1645266330",
+        //         "userId" => "644722",
+        //         "balances" => array(
         //             array(
-        //                 "accountId":5470306579272968,
-        //                 "collateralCurrency":true,
-        //                 "asset":"ETH",
-        //                 "free":0.0,
-        //                 "locked":0.0,
-        //                 "default":false,
+        //                 "accountId" => "120702016179403605",
+        //                 "collateralCurrency" => false,
+        //                 "asset" => "CAKE",
+        //                 "free" => "1.784",
+        //                 "locked" => "0.0",
+        //                 "default" => false,
         //             ),
+        //             {
+        //                 "accountId" => "109698017413175316",
+        //                 "collateralCurrency" => true,
+        //                 "asset" => "USD",
+        //                 "free" => "7.58632",
+        //                 "locked" => "0.0",
+        //                 "default" => true,
+        //             }
         //         )
         //     }
         //
@@ -499,19 +670,19 @@ class currencycom extends Exchange {
         if ($limit !== null) {
             $request['limit'] = $limit; // default 100, max 1000, valid limits 5, 10, 20, 50, 100, 500, 1000, 5000
         }
-        $response = $this->publicGetDepth (array_merge($request, $params));
+        $response = $this->publicGetV2Depth (array_merge($request, $params));
         //
         //     {
         //         "lastUpdateId":1590999849037,
         //         "asks":[
-        //             [0.02495,60.0000],
-        //             [0.02496,120.0000],
-        //             [0.02497,240.0000],
+        //             [0.02495,60.0345],
+        //             [0.02496,34.1],
+        //             ...
         //         ],
         //         "bids":[
-        //             [0.02487,60.0000],
-        //             [0.02486,120.0000],
-        //             [0.02485,240.0000],
+        //             [0.02487,72.4144854],
+        //             [0.02486,24.043],
+        //             ...
         //         ]
         //     }
         //
@@ -546,32 +717,47 @@ class currencycom extends Exchange {
         // fetchTickers
         //
         //     {
-        //         "symbol":"EVK",
-        //         "highPrice":"22.57",
-        //         "lowPrice":"22.16",
-        //         "volume":"1",
-        //         "quoteVolume":"22.2",
-        //         "openTime":1590699364000,
-        //         "closeTime":1590785764000
+        //          "symbol" => "SHIB/USD_LEVERAGE",
+        //          "weightedAvgPrice" => "0.000027595",
+        //          "lastPrice" => "0.00002737",
+        //          "lastQty" => "1.11111111E8",
+        //          "bidPrice" => "0.00002737",
+        //          "askPrice" => "0.00002782",
+        //          "highPrice" => "0.00002896",
+        //          "lowPrice" => "0.00002738",
+        //          "volume" => "16472160000",
+        //          "quoteVolume" => "454796.3376",
+        //          "openTime" => "1645187472000",
+        //          "closeTime" => "1645273872000",
         //     }
         //
-        $timestamp = $this->safe_integer($ticker, 'closeTime');
-        $marketId = $this->safe_string($ticker, 'symbol');
+        // ws:marketData.subscribe
+        //
+        //     {
+        //          "symbolName":"TXN",
+        //          "bid":139.85,
+        //          "bidQty":2500,
+        //          "ofr":139.92000000000002,
+        //          "ofrQty":2500,
+        //          "timestamp":1597850971558
+        //      }
+        //
+        $timestamp = $this->safe_integer_2($ticker, 'closeTime', 'timestamp');
+        $marketId = $this->safe_string_2($ticker, 'symbol', 'symbolName');
         $market = $this->safe_market($marketId, $market, '/');
         $last = $this->safe_string($ticker, 'lastPrice');
-        $open = $this->safe_string($ticker, 'openPrice');
         return $this->safe_ticker(array(
             'symbol' => $market['symbol'],
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
             'high' => $this->safe_string($ticker, 'highPrice'),
             'low' => $this->safe_string($ticker, 'lowPrice'),
-            'bid' => $this->safe_string($ticker, 'bidPrice'),
+            'bid' => $this->safe_string_2($ticker, 'bidPrice', 'bid'),
             'bidVolume' => $this->safe_string($ticker, 'bidQty'),
-            'ask' => $this->safe_string($ticker, 'askPrice'),
-            'askVolume' => $this->safe_string($ticker, 'askQty'),
+            'ask' => $this->safe_string_2($ticker, 'askPrice', 'ofr'),
+            'askVolume' => $this->safe_string($ticker, 'ofrQty'),
             'vwap' => $this->safe_string($ticker, 'weightedAvgPrice'),
-            'open' => $open,
+            'open' => $this->safe_string($ticker, 'openPrice'),
             'close' => $last,
             'last' => $last,
             'previousClose' => $this->safe_string($ticker, 'prevClosePrice'), // previous day close
@@ -590,7 +776,7 @@ class currencycom extends Exchange {
         $request = array(
             'symbol' => $market['id'],
         );
-        $response = $this->publicGetTicker24hr (array_merge($request, $params));
+        $response = $this->publicGetV2Ticker24hr (array_merge($request, $params));
         //
         //     {
         //         "symbol":"ETH/BTC",
@@ -616,17 +802,22 @@ class currencycom extends Exchange {
 
     public function fetch_tickers($symbols = null, $params = array ()) {
         $this->load_markets();
-        $response = $this->publicGetTicker24hr ($params);
+        $response = $this->publicGetV2Ticker24hr ($params);
         //
         //     array(
         //         {
-        //             "symbol":"EVK",
-        //             "highPrice":"22.57",
-        //             "lowPrice":"22.16",
-        //             "volume":"1",
-        //             "quoteVolume":"22.2",
-        //             "openTime":1590699364000,
-        //             "closeTime":1590785764000
+        //              "symbol" => "SHIB/USD_LEVERAGE",
+        //              "weightedAvgPrice" => "0.000027595",
+        //              "lastPrice" => "0.00002737",
+        //              "lastQty" => "1.11111111E8",
+        //              "bidPrice" => "0.00002737",
+        //              "askPrice" => "0.00002782",
+        //              "highPrice" => "0.00002896",
+        //              "lowPrice" => "0.00002738",
+        //              "volume" => "16472160000",
+        //              "quoteVolume" => "454796.3376",
+        //              "openTime" => "1645187472000",
+        //              "closeTime" => "1645273872000",
         //         }
         //     )
         //
@@ -667,7 +858,7 @@ class currencycom extends Exchange {
         if ($limit !== null) {
             $request['limit'] = $limit; // default 500, max 1000
         }
-        $response = $this->publicGetKlines (array_merge($request, $params));
+        $response = $this->publicGetV2Klines (array_merge($request, $params));
         //
         //     [
         //         [1590971040000,"0.02454","0.02456","0.02452","0.02456",249],
@@ -683,11 +874,11 @@ class currencycom extends Exchange {
         // fetchTrades (public aggregate trades)
         //
         //     {
-        //         "a":1658318071,
-        //         "p":"0.02476",
-        //         "q":"0.0",
-        //         "T":1591001423382,
-        //         "m":false
+        //         "a":"1658318071",    // Aggregate tradeId
+        //         "p":"0.02476",       // Price
+        //         "q":"0.0",           // Official doc says => "Quantity (should be ignored)"
+        //         "T":"1591001423382", // Epoch $timestamp in MS
+        //         "m":false            // Was the buyer the maker
         //     }
         //
         // createOrder fills (private)
@@ -702,17 +893,18 @@ class currencycom extends Exchange {
         // fetchMyTrades
         //
         //     {
-        //         "symbol" => "BNBBTC",
-        //         "id" => 28457,
-        //         "orderId" => 100234,
-        //         "price" => "4.00000100",
-        //         "qty" => "12.00000000",
-        //         "commission" => "10.10000000",
-        //         "commissionAsset" => "BNB",
-        //         "time" => 1499865549590,
-        //         "isBuyer" => true,
-        //         "isMaker" => false,
-        //         "isBestMatch" => true
+        //         "symbol" => "DOGE/USD",
+        //         "id" => "116046000",
+        //         "orderId" => "00000000-0000-0000-0000-000006dbb8ad",
+        //         "price" => "0.14094",
+        //         "qty" => "40.0",
+        //         "commission" => "0.01",
+        //         "commissionAsset" => "USD",
+        //         "time" => "1645283022351",
+        //         "buyer" => false,
+        //         "maker" => false,
+        //         "isBuyer" => false,
+        //         "isMaker" => false
         //     }
         //
         $timestamp = $this->safe_integer_2($trade, 'T', 'time');
@@ -770,17 +962,20 @@ class currencycom extends Exchange {
         if ($limit !== null) {
             $request['limit'] = $limit; // default 500, max 1000
         }
-        $response = $this->publicGetAggTrades (array_merge($request, $params));
+        if ($since !== null) {
+            $request['startTime'] = $since;
+        }
+        $response = $this->publicGetV2AggTrades (array_merge($request, $params));
         //
+        // array(
         //     array(
-        //         {
-        //             "a":1658318071,
-        //             "p":"0.02476",
-        //             "q":"0.0",
-        //             "T":1591001423382,
-        //             "m":false
-        //         }
-        //     )
+        //         "a":"1658318071",    // Aggregate tradeId
+        //         "p":"0.02476",       // Price
+        //         "q":"0.0",           // Official doc says => "Quantity (should be ignored)"
+        //         "T":"1591001423382", // Epoch timestamp in MS
+        //         "m":false            // Was the buyer the maker
+        //     ),
+        // )
         //
         return $this->parse_trades($response, $market, $since, $limit);
     }
@@ -887,34 +1082,50 @@ class currencycom extends Exchange {
             // 'stopLoss' => '54.321'
             // 'guaranteedStopLoss' => '54.321',
         );
-        if ($uppercaseType === 'LIMIT') {
+        if ($type === 'limit') {
             $request['price'] = $this->price_to_precision($symbol, $price);
             $request['timeInForce'] = $this->options['defaultTimeInForce']; // 'GTC' = Good To Cancel (default), 'IOC' = Immediate Or Cancel, 'FOK' = Fill Or Kill
-        } else if ($uppercaseType === 'STOP') {
+        } else if ($type === 'stop') {
             $request['price'] = $this->price_to_precision($symbol, $price);
         }
-        $response = $this->privatePostOrder (array_merge($request, $params));
+        $response = $this->privatePostV2Order (array_merge($request, $params));
+        //
+        // limit
         //
         //     {
         //         "symbol" => "BTC/USD",
-        //         "orderId" => "00000000-0000-0000-0000-0000000c0263",
-        //         "clientOrderId" => "00000000-0000-0000-0000-0000000c0263",
-        //         "transactTime" => 1589878206426,
-        //         "price" => "9825.66210000",
-        //         "origQty" => "0.01",
-        //         "executedQty" => "0.01",
+        //         "orderId" => "00000000-0000-0000-0000-000006eaaaa0",
+        //         "transactTime" => "1645281669295",
+        //         "price" => "30000.00000000",
+        //         "origQty" => "0.0002",
+        //         "executedQty" => "0.0",  //positive for BUY, negative for SELL
+        //         "status" => "NEW",
+        //         "timeInForce" => "GTC",
+        //         "type" => "LIMIT",
+        //         "side" => "BUY",
+        //     }
+        //
+        // $market
+        //
+        //     {
+        //         "symbol" => "DOGE/USD",
+        //         "orderId" => "00000000-0000-0000-0000-000006eab8ad",
+        //         "transactTime" => "1645283022252",
+        //         "price" => "0.14066000",
+        //         "origQty" => "40",
+        //         "executedQty" => "40.0",  //positive for BUY, negative for SELL
         //         "status" => "FILLED",
         //         "timeInForce" => "FOK",
         //         "type" => "MARKET",
-        //         "side" => "BUY",
+        //         "side" => "SELL",
         //         "fills" => array(
-        //             {
-        //                 "price" => "9807.05",
-        //                 "qty" => "0.01",
+        //             array(
+        //                 "price" => "0.14094",
+        //                 "qty" => "40.0",
         //                 "commission" => "0",
-        //                 "commissionAsset" => "dUSD"
-        //             }
-        //         )
+        //                 "commissionAsset" => "dUSD",
+        //             ),
+        //         ),
         //     }
         //
         return $this->parse_order($response, $market);
@@ -933,7 +1144,26 @@ class currencycom extends Exchange {
             $fetchOpenOrdersRateLimit = intval($numSymbols / 2);
             throw new ExchangeError($this->id . ' fetchOpenOrders() WARNING => fetching open orders without specifying a $symbol is rate-limited to one call per ' . (string) $fetchOpenOrdersRateLimit . ' seconds. Do not call this method frequently to avoid ban. Set ' . $this->id . '.options["warnOnFetchOpenOrdersWithoutSymbol"] = false to suppress this warning message.');
         }
-        $response = $this->privateGetOpenOrders (array_merge($request, $params));
+        $response = $this->privateGetV2OpenOrders (array_merge($request, $params));
+        //
+        //     array(
+        //         array(
+        //             "symbol" => "DOGE/USD",
+        //             "orderId" => "00000000-0000-0003-0000-000004bac57a",
+        //             "price" => "0.13",
+        //             "origQty" => "39.0",
+        //             "executedQty" => "0.0",
+        //             "status" => "NEW",
+        //             "timeInForce" => "GTC",
+        //             "type" => "LIMIT",
+        //             "side" => "BUY",
+        //             "time" => "1645284216240",
+        //             "updateTime" => "1645284216240",
+        //             "leverage" => false,
+        //             "working" => true
+        //         ),
+        //     )
+        //
         return $this->parse_orders($response, $market, $since, $limit);
     }
 
@@ -954,12 +1184,12 @@ class currencycom extends Exchange {
         } else {
             $request['origClientOrderId'] = $origClientOrderId;
         }
-        $response = $this->privateDeleteOrder (array_merge($request, $params));
+        $response = $this->privateDeleteV2Order (array_merge($request, $params));
         //
         //     {
         //         "symbol":"ETH/USD",
         //         "orderId":"00000000-0000-0000-0000-00000024383b",
-        //         "clientOrderId":"00000000-0000-0000-0000-00000024383b",
+        //         "clientOrderId":"00000000-0000-0000-0000-00000024383b", // this might not be present
         //         "price":"150",
         //         "origQty":"0.1",
         //         "executedQty":"0.0",
@@ -984,29 +1214,171 @@ class currencycom extends Exchange {
         if ($limit !== null) {
             $request['limit'] = $limit;
         }
-        $response = $this->privateGetMyTrades (array_merge($request, $params));
+        $response = $this->privateGetV2MyTrades (array_merge($request, $params));
         //
         //     array(
-        //         {
-        //             "symbol" => "BNBBTC",
-        //             "id" => 28457,
-        //             "orderId" => 100234,
-        //             "price" => "4.00000100",
-        //             "qty" => "12.00000000",
-        //             "commission" => "10.10000000",
-        //             "commissionAsset" => "BNB",
-        //             "time" => 1499865549590,
-        //             "isBuyer" => true,
-        //             "isMaker" => false,
-        //             "isBestMatch" => true
-        //         }
+        //         array(
+        //             "symbol" => "DOGE/USD",
+        //             "id" => "116046000",
+        //             "orderId" => "00000000-0000-0000-0000-000006dbb8ad",
+        //             "price" => "0.14094",
+        //             "qty" => "40.0",
+        //             "commission" => "0.01",
+        //             "commissionAsset" => "USD",
+        //             "time" => "1645283022351",
+        //             "buyer" => false,
+        //             "maker" => false,
+        //             "isBuyer" => false,
+        //             "isMaker" => false
+        //         ),
         //     )
         //
         return $this->parse_trades($response, $market, $since, $limit);
     }
 
+    public function fetch_deposits($code = null, $since = null, $limit = null, $params = array ()) {
+        return $this->fetch_transactions_by_method('privateGetV2Deposits', $code, $since, $limit, $params);
+    }
+
+    public function fetch_withdrawals($code = null, $since = null, $limit = null, $params = array ()) {
+        return $this->fetch_transactions_by_method('privateGetV2Withdrawals', $code, $since, $limit, $params);
+    }
+
+    public function fetch_transactions($code = null, $since = null, $limit = null, $params = array ()) {
+        return $this->fetch_transactions_by_method('privateGetV2Transactions', $code, $since, $limit, $params);
+    }
+
+    public function fetch_transactions_by_method($method, $code = null, $since = null, $limit = null, $params = array ()) {
+        $this->load_markets();
+        $request = array();
+        $currency = null;
+        if ($code !== null) {
+            $currency = $this->currency($code);
+        }
+        if ($since !== null) {
+            $request['startTime'] = $since;
+        }
+        if ($limit !== null) {
+            $request['limit'] = $limit;
+        }
+        $response = $this->$method (array_merge($request, $params));
+        //
+        //     array(
+        //       array(
+        //         "id" => "616769213",
+        //         "balance" => "2.088",
+        //         "amount" => "1.304",   // negative for 'withdrawal'
+        //         "currency" => "CAKE",
+        //         "type" => "deposit",
+        //         "timestamp" => "1645282121023",
+        //         "paymentMethod" => "BLOCKCHAIN",
+        //         "blockchainTransactionHash" => "0x57c68c1f2ae74d5eda5a2a00516361d241a5c9e1ee95bf32573523857c38c112",
+        //         "status" => "PROCESSED",
+        //         "commission" => "0.14", // this property only exists in withdrawal
+        //       ),
+        //     )
+        //
+        return $this->parse_transactions($response, $currency, $since, $limit, $params);
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        $id = $this->safe_string($transaction, 'id');
+        $txHash = $this->safe_string($transaction, 'blockchainTransactionHash');
+        $amount = $this->safe_number($transaction, 'amount');
+        $timestamp = $this->safe_integer($transaction, 'timestamp');
+        $currencyId = $this->safe_string($transaction, 'currency');
+        $code = $this->safe_currency_code($currencyId, $currency);
+        $state = $this->parse_transaction_status($this->safe_string($transaction, 'state'));
+        $type = $this->parse_transaction_type($this->safe_string($transaction, 'type'));
+        $feeCost = $this->safe_string($transaction, 'commission');
+        $fee = null;
+        if ($feeCost !== null) {
+            $fee = array( 'currency' => $code, 'cost' => $feeCost );
+        }
+        $result = array(
+            'id' => $id,
+            'txid' => $txHash,
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601($timestamp),
+            'network' => null,
+            'addressFrom' => null,
+            'address' => null,
+            'addressTo' => null,
+            'tagFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'type' => $type,
+            'amount' => $amount,
+            'currency' => $code,
+            'status' => $state,
+            'updated' => null,
+            'comment' => null,
+            'fee' => $fee,
+            'info' => $transaction,
+        );
+        return $result;
+    }
+
+    public function parse_transaction_status($status) {
+        $statuses = array(
+            'APPROVAL' => 'pending',
+            'PROCESSED' => 'ok',
+        );
+        return $this->safe_string($statuses, $status, $status);
+    }
+
+    public function parse_transaction_type($type) {
+        $types = array(
+            'deposit' => 'deposit',
+            'withdrawal' => 'withdrawal',
+        );
+        return $this->safe_string($types, $type, $type);
+    }
+
+    public function fetch_leverage($symbol, $params = array ()) {
+        $this->load_markets();
+        $market = $this->market($symbol);
+        $request = array(
+            'symbol' => $market['id'],
+        );
+        $response = $this->privateGetV2LeverageSettings (array_merge($request, $params));
+        //
+        // {
+        //     "values" => array( 1, 2, 5, 10, ),
+        //     "value" => "10",
+        // }
+        //
+        return $this->safe_number($response, 'value');
+    }
+
+    public function fetch_deposit_address($code, $params = array ()) {
+        $this->load_markets();
+        $currency = $this->currency($code);
+        $request = array(
+            'coin' => $currency['id'],
+        );
+        $response = $this->privateGetV2DepositAddress (array_merge($request, $params));
+        //
+        //     array( "address":"0x97d64eb014ac779194991e7264f01c74c90327f0" )
+        //
+        return $this->parse_deposit_address($response, $currency);
+    }
+
+    public function parse_deposit_address($depositAddress, $currency = null) {
+        $address = $this->safe_string($depositAddress, 'address');
+        $this->check_address($address);
+        $currency = $this->safe_currency(null, $currency);
+        return array(
+            'currency' => $currency['code'],
+            'address' => $address,
+            'tag' => null,
+            'network' => null,
+            'info' => $depositAddress,
+        );
+    }
+
     public function sign($path, $api = 'public', $method = 'GET', $params = array (), $headers = null, $body = null) {
-        $url = $this->urls['api'][$api] . '/' . $this->version . '/' . $path;
+        $url = $this->urls['api'][$api] . '/' . $path;
         if ($path === 'historicalTrades') {
             $headers = array(
                 'X-MBX-APIKEY' => $this->apiKey,

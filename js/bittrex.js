@@ -20,32 +20,38 @@ module.exports = class bittrex extends Exchange {
             'pro': true,
             // new metainfo interface
             'has': {
+                'CORS': undefined,
                 'spot': true,
                 'margin': false,
                 'swap': false,
                 'future': false,
                 'option': false,
+                'addMargin': false,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
-                'CORS': undefined,
                 'createDepositAddress': true,
-                'createReduceOnlyOrder': false,
                 'createMarketOrder': true,
                 'createOrder': true,
+                'createReduceOnlyOrder': false,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': true,
                 'fetchCurrencies': true,
                 'fetchDepositAddress': true,
                 'fetchDeposits': true,
+                'fetchFundingFees': undefined,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
                 'fetchIsolatedPositions': false,
+                'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': 'emulated',
@@ -62,6 +68,8 @@ module.exports = class bittrex extends Exchange {
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
+                'fetchTradingFee': true,
+                'fetchTradingFees': true,
                 'fetchTransactions': undefined,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
@@ -116,6 +124,10 @@ module.exports = class bittrex extends Exchange {
                 'private': {
                     'get': [
                         'account',
+                        'account/fees/fiat',
+                        'account/fees/fiat/{currencySymbol}',
+                        'account/fees/trading',
+                        'account/fees/trading/{marketSymbol}',
                         'account/volume',
                         'addresses',
                         'addresses/{currencySymbol}',
@@ -241,6 +253,7 @@ module.exports = class bittrex extends Exchange {
             },
             'commonCurrencies': {
                 'BIFI': 'Bifrost Finance',
+                'BTR': 'BTRIPS',
                 'MEME': 'Memetic', // conflict with Meme Inu
                 'MER': 'Mercury', // conflict with Mercurial Finance
                 'PROS': 'Pros.Finance',
@@ -290,7 +303,6 @@ module.exports = class bittrex extends Exchange {
             const quoteId = this.safeString (market, 'quoteCurrencySymbol');
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
-            const pricePrecision = this.safeInteger (market, 'precision', 8);
             const status = this.safeString (market, 'status');
             result.push ({
                 'id': this.safeString (market, 'symbol'),
@@ -318,9 +330,13 @@ module.exports = class bittrex extends Exchange {
                 'optionType': undefined,
                 'precision': {
                     'amount': parseInt ('8'),
-                    'price': pricePrecision,
+                    'price': this.safeInteger (market, 'precision', 8),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
                     'amount': {
                         'min': this.safeNumber (market, 'minTradeSize'),
                         'max': undefined,
@@ -330,10 +346,6 @@ module.exports = class bittrex extends Exchange {
                         'max': undefined,
                     },
                     'cost': {
-                        'min': undefined,
-                        'max': undefined,
-                    },
-                    'leverage': {
                         'min': undefined,
                         'max': undefined,
                     },
@@ -674,6 +686,62 @@ module.exports = class bittrex extends Exchange {
         //     ]
         //
         return this.parseTrades (response, market, since, limit);
+    }
+
+    async fetchTradingFee (symbol, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request = {
+            'marketSymbol': market['id'],
+        };
+        const response = await this.privateGetAccountFeesTradingMarketSymbol (this.extend (request, params));
+        //
+        //     {
+        //         "marketSymbol":"1INCH-ETH",
+        //         "makerRate":"0.00750000",
+        //         "takerRate":"0.00750000"
+        //     }
+        //
+        return this.parseTradingFee (response, market);
+    }
+
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const response = await this.privateGetAccountFeesTrading (params);
+        //
+        //     [
+        //         {"marketSymbol":"1ECO-BTC","makerRate":"0.00750000","takerRate":"0.00750000"},
+        //         {"marketSymbol":"1ECO-USDT","makerRate":"0.00750000","takerRate":"0.00750000"},
+        //         {"marketSymbol":"1INCH-BTC","makerRate":"0.00750000","takerRate":"0.00750000"},
+        //         {"marketSymbol":"1INCH-ETH","makerRate":"0.00750000","takerRate":"0.00750000"},
+        //         {"marketSymbol":"1INCH-USD","makerRate":"0.00750000","takerRate":"0.00750000"},
+        //     ]
+        //
+        return this.parseTradingFees (response);
+    }
+
+    parseTradingFee (fee, market = undefined) {
+        const marketId = this.safeString (fee, 'marketSymbol');
+        const maker = this.safeNumber (fee, 'makerRate');
+        const taker = this.safeNumber (fee, 'takerRate');
+        return {
+            'info': fee,
+            'symbol': this.safeSymbol (marketId, market),
+            'maker': maker,
+            'taker': taker,
+        };
+    }
+
+    parseTradingFees (fees) {
+        const result = {
+            'info': fees,
+        };
+        for (let i = 0; i < fees.length; i++) {
+            const fee = this.parseTradingFee (fees[i]);
+            const symbol = fee['symbol'];
+            result[symbol] = fee;
+        }
+        return result;
     }
 
     parseOHLCV (ohlcv, market = undefined) {

@@ -36,29 +36,56 @@ class bitvavo(Exchange):
             'certified': True,
             'pro': True,
             'has': {
+                'CORS': None,
+                'spot': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
-                'CORS': None,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'editOrder': True,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchIsolatedPositions': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrders': True,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
                 'fetchWithdrawals': True,
-                'privateAPI': True,
-                'publicAPI': True,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -314,18 +341,18 @@ class bitvavo(Exchange):
                 'swap': False,
                 'future': False,
                 'option': False,
+                'active': (status == 'trading'),
                 'contract': False,
                 'linear': None,
                 'inverse': None,
                 'contractSize': None,
-                'active': (status == 'trading'),
                 'expiry': None,
                 'expiryDatetime': None,
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(market, 'pricePrecision'),
                     'amount': amountPrecision,
+                    'price': self.safe_integer(market, 'pricePrecision'),
                 },
                 'limits': {
                     'leverage': {
@@ -606,7 +633,7 @@ class bitvavo(Exchange):
         timestamp = self.safe_integer(trade, 'timestamp')
         side = self.safe_string(trade, 'side')
         id = self.safe_string_2(trade, 'id', 'fillId')
-        marketId = self.safe_integer(trade, 'market')
+        marketId = self.safe_string(trade, 'market')
         symbol = self.safe_symbol(marketId, market, '-')
         taker = self.safe_value(trade, 'taker')
         takerOrMaker = None
@@ -1267,7 +1294,7 @@ class bitvavo(Exchange):
         #         }
         #     ]
         #
-        return self.parse_transactions(response, currency, since, limit)
+        return self.parse_transactions(response, currency, since, limit, {'type': 'withdrawal'})
 
     async def fetch_deposits(self, code=None, since=None, limit=None, params={}):
         await self.load_markets()
@@ -1298,7 +1325,7 @@ class bitvavo(Exchange):
         #         }
         #     ]
         #
-        return self.parse_transactions(response, currency, since, limit)
+        return self.parse_transactions(response, currency, since, limit, {'type': 'deposit'})
 
     def parse_transaction_status(self, status):
         statuses = {
@@ -1364,10 +1391,10 @@ class bitvavo(Exchange):
                 'currency': code,
             }
         type = None
-        if 'success' in transaction:
+        if ('success' in transaction) or ('address' in transaction):
             type = 'withdrawal'
         else:
-            type = 'deposit' if (status is None) else 'withdrawal'
+            type = 'deposit'
         tag = self.safe_string(transaction, 'paymentId')
         return {
             'info': transaction,

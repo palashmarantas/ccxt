@@ -20,10 +20,11 @@ class digifinex extends Exchange {
             'version' => 'v3',
             'rateLimit' => 900, // 300 for posts
             'has' => array(
+                'CORS' => null,
                 'spot' => true,
-                'margin' => null,
-                'swap' => false,
-                'future' => false,
+                'margin' => null, // has but unimplemented
+                'swap' => null, // has but unimplemented
+                'future' => null, // has but unimplemented
                 'option' => false,
                 'cancelOrder' => true,
                 'cancelOrders' => true,
@@ -32,34 +33,20 @@ class digifinex extends Exchange {
                 'fetchCurrencies' => true,
                 'fetchDepositAddress' => true,
                 'fetchDeposits' => true,
-                'fetchFundingHistory' => false,
-                'fetchFundingRate' => false,
-                'fetchFundingRateHistory' => false,
-                'fetchFundingRates' => false,
-                'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLedger' => true,
-                'fetchLeverage' => false,
                 'fetchMarkets' => true,
-                'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
                 'fetchOHLCV' => true,
                 'fetchOpenOrders' => true,
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
                 'fetchOrders' => true,
-                'fetchPositions' => false,
-                'fetchPositionsRisk' => false,
-                'fetchPremiumIndexOHLCV' => false,
                 'fetchStatus' => true,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
                 'fetchWithdrawals' => true,
-                'reduceMargin' => false,
-                'setLeverage' => false,
-                'setPositionMode' => false,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -361,7 +348,7 @@ class digifinex extends Exchange {
                 'settleId' => null,
                 'type' => 'spot',
                 'spot' => true,
-                'margin' => false,
+                'margin' => null,
                 'swap' => false,
                 'future' => false,
                 'option' => false,
@@ -427,36 +414,52 @@ class digifinex extends Exchange {
             list($baseId, $quoteId) = explode('_', $id);
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $symbol = $base . '/' . $quote;
-            $precision = array(
-                'amount' => $this->safe_integer($market, 'volume_precision'),
-                'price' => $this->safe_integer($market, 'price_precision'),
-            );
-            $limits = array(
-                'amount' => array(
-                    'min' => $this->safe_number($market, 'min_volume'),
-                    'max' => null,
-                ),
-                'price' => array(
-                    'min' => null,
-                    'max' => null,
-                ),
-                'cost' => array(
-                    'min' => $this->safe_number($market, 'min_amount'),
-                    'max' => null,
-                ),
-            );
-            $active = null;
             $result[] = array(
                 'id' => $id,
-                'symbol' => $symbol,
+                'symbol' => $base . '/' . $quote,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
-                'active' => $active,
-                'precision' => $precision,
-                'limits' => $limits,
+                'settleId' => null,
+                'type' => 'spot',
+                'spot' => true,
+                'margin' => null,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
+                'active' => null,
+                'contract' => false,
+                'linear' => null,
+                'inverse' => null,
+                'contractSize' => null,
+                'expiry' => null,
+                'expiryDatetime' => null,
+                'strike' => null,
+                'optionType' => null,
+                'precision' => array(
+                    'price' => $this->safe_integer($market, 'price_precision'),
+                    'amount' => $this->safe_integer($market, 'volume_precision'),
+                ),
+                'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
+                    'amount' => array(
+                        'min' => $this->safe_number($market, 'min_volume'),
+                        'max' => null,
+                    ),
+                    'price' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
+                    'cost' => array(
+                        'min' => $this->safe_number($market, 'min_amount'),
+                        'max' => null,
+                    ),
+                ),
                 'info' => $market,
             );
         }
@@ -663,7 +666,7 @@ class digifinex extends Exchange {
         //         "fee" => 0.096,
         //         "fee_currency" => "USDT",
         //         "timestamp" => 1499865549,
-        //         "side" => "buy",
+        //         "side" => "buy", // or "side" => "sell_market"
         //         "is_maker" => true
         //     }
         //
@@ -671,6 +674,9 @@ class digifinex extends Exchange {
         $orderId = $this->safe_string($trade, 'order_id');
         $timestamp = $this->safe_timestamp_2($trade, 'date', 'timestamp');
         $side = $this->safe_string_2($trade, 'type', 'side');
+        $parts = explode('_', $side);
+        $side = $this->safe_string($parts, 0);
+        $type = $this->safe_string($parts, 1);
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'amount');
         $marketId = $this->safe_string($trade, 'symbol');
@@ -692,7 +698,7 @@ class digifinex extends Exchange {
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
             'symbol' => $symbol,
-            'type' => null,
+            'type' => $type,
             'order' => $orderId,
             'side' => $side,
             'price' => $priceString,
@@ -1358,14 +1364,13 @@ class digifinex extends Exchange {
     }
 
     public function parse_transaction_status($status) {
+        // deposit state includes => 1 (in deposit), 2 (to be confirmed), 3 (successfully deposited), 4 (stopped)
+        // withdrawal state includes => 1 (is_array(progress) && array_key_exists(application, progress)), 2 (to be confirmed), 3 (completed), 4 (rejected)
         $statuses = array(
-            '0' => 'pending', // Email Sent
-            '1' => 'canceled', // Cancelled (different from 1 = ok in deposits)
-            '2' => 'pending', // Awaiting Approval
-            '3' => 'failed', // Rejected
-            '4' => 'pending', // Processing
-            '5' => 'failed', // Failure
-            '6' => 'ok', // Completed
+            '1' => 'pending', // in Progress
+            '2' => 'pending', // to be confirmed
+            '3' => 'ok', // Completed
+            '4' => 'failed', // Rejected
         );
         return $this->safe_string($statuses, $status, $status);
     }

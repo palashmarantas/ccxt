@@ -18,14 +18,22 @@ module.exports = class bitget extends Exchange {
             'version': 'v3',
             'rateLimit': 1000, // up to 3000 requests per 5 minutes ≈ 600 requests per minute ≈ 10 requests per second ≈ 100 ms
             'has': {
-                'fetchPositions': true,
-                'fetchPosition': true,
+                'CORS': undefined,
+                'spot': true,
+                'margin': false,
+                'swap': undefined, // has but unimplemented
+                'future': undefined, // has but unimplemented
+                'option': false,
                 'cancelOrder': true,
                 'cancelOrders': true,
-                'CORS': undefined,
                 'createOrder': true,
                 'fetchAccounts': true,
                 'fetchBalance': true,
+                'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
+                'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': true,
                 'fetchCurrencies': true,
                 'fetchDeposits': true,
@@ -36,6 +44,8 @@ module.exports = class bitget extends Exchange {
                 'fetchOrder': true,
                 'fetchOrderBook': true,
                 'fetchOrderTrades': true,
+                'fetchPosition': true,
+                'fetchPositions': true,
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTime': true,
@@ -101,6 +111,7 @@ module.exports = class bitget extends Exchange {
                         'order/deposit_withdraw', // Query assets history
                     ],
                     'post': [
+                        'trade/orders', // Place trade order
                         'order/orders/place', // Place order
                         'order/orders/{order_id}/submitcancel', // Request to cancel an order request
                         'order/orders/batchcancel', // Bulk order cancellation
@@ -685,6 +696,9 @@ module.exports = class bitget extends Exchange {
                 },
             },
             'precisionMode': TICK_SIZE,
+            'commonCurrencies': {
+                'JADE': 'Jade Protocol',
+            },
             'options': {
                 'createMarketBuyOrderRequiresPrice': true,
                 'fetchMarkets': [
@@ -799,27 +813,20 @@ module.exports = class bitget extends Exchange {
         let marketType = 'spot';
         let spot = true;
         let swap = false;
-        const baseId = this.safeString2 (market, 'base_currency', 'coin');
+        const baseId = this.safeString2 (market, 'base_currency', 'underlying_index');
         const quoteId = this.safeString (market, 'quote_currency');
+        const settleId = this.safeString (market, 'coin');
         const contractVal = this.safeNumber (market, 'contract_val');
+        const base = this.safeCurrencyCode (baseId);
+        const quote = this.safeCurrencyCode (quoteId);
+        const settle = this.safeCurrencyCode (settleId);
+        let symbol = base + '/' + quote;
         if (contractVal !== undefined) {
             marketType = 'swap';
             spot = false;
             swap = true;
+            symbol = symbol + ':' + settle;
         }
-        const base = this.safeCurrencyCode (baseId);
-        const quote = this.safeCurrencyCode (quoteId);
-        let symbol = id.toUpperCase ();
-        if (spot) {
-            symbol = base + '/' + quote;
-        }
-        const tickSize = this.safeString (market, 'tick_size');
-        const sizeIncrement = this.safeString (market, 'size_increment');
-        const precision = {
-            'amount': this.parseNumber (this.parsePrecision (sizeIncrement)),
-            'price': this.parseNumber (this.parsePrecision (tickSize)),
-        };
-        const minAmount = this.safeNumber2 (market, 'min_size', 'base_min_size');
         const status = this.safeString (market, 'status');
         let active = undefined;
         if (status !== undefined) {
@@ -831,28 +838,49 @@ module.exports = class bitget extends Exchange {
             'symbol': symbol,
             'base': base,
             'quote': quote,
+            'settle': settle,
             'baseId': baseId,
             'quoteId': quoteId,
-            'info': market,
+            'settleId': settleId,
             'type': marketType,
             'spot': spot,
+            'margin': false,
             'swap': swap,
+            'future': false,
+            'option': false,
             'active': active,
-            'precision': precision,
+            'contract': swap,
+            'linear': (base === settle),
+            'inverse': (quote === settle),
+            'contractSize': contractVal,
+            'expiry': undefined,
+            'expiryDatetime': undefined,
+            'strike': undefined,
+            'optionType': undefined,
+            'precision': {
+                'amount': this.parseNumber (this.parsePrecision (this.safeString (market, 'size_increment'))),
+                'price': this.parseNumber (this.parsePrecision (this.safeString (market, 'tick_size'))),
+                'base': this.parseNumber (this.parsePrecision (this.safeString (market, 'base_asset_precision'))),
+            },
             'limits': {
+                'leverage': {
+                    'min': undefined,
+                    'max': undefined,
+                },
                 'amount': {
-                    'min': minAmount,
+                    'min': this.safeNumber2 (market, 'min_size', 'base_min_size'),
                     'max': undefined,
                 },
                 'price': {
-                    'min': precision['price'],
+                    'min': undefined,
                     'max': undefined,
                 },
                 'cost': {
-                    'min': precision['price'],
+                    'min': undefined,
                     'max': undefined,
                 },
             },
+            'info': market,
         });
     }
 
@@ -1056,26 +1084,8 @@ module.exports = class bitget extends Exchange {
         //     }
         //
         const timestamp = this.safeInteger2 (ticker, 'timestamp', 'id');
-        let symbol = undefined;
         const marketId = this.safeString2 (ticker, 'instrument_id', 'symbol');
-        if (marketId in this.markets_by_id) {
-            market = this.markets_by_id[marketId];
-            symbol = market['symbol'];
-        } else if (marketId !== undefined) {
-            const parts = marketId.split ('_');
-            const numParts = parts.length;
-            if (numParts === 2) {
-                const [ baseId, quoteId ] = parts;
-                const base = this.safeCurrencyCode (baseId);
-                const quote = this.safeCurrencyCode (quoteId);
-                symbol = base + '/' + quote;
-            } else {
-                symbol = marketId;
-            }
-        }
-        if ((symbol === undefined) && (market !== undefined)) {
-            symbol = market['symbol'];
-        }
+        market = this.safeMarket (marketId, market, '_');
         const last = this.safeString2 (ticker, 'last', 'close');
         const open = this.safeString (ticker, 'open');
         let bidVolume = undefined;
@@ -1096,9 +1106,8 @@ module.exports = class bitget extends Exchange {
         }
         const baseVolume = this.safeString2 (ticker, 'amount', 'volume_24h');
         const quoteVolume = this.safeString (ticker, 'vol');
-        const vwap = this.vwap (baseVolume, quoteVolume);
         return this.safeTicker ({
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
             'high': this.safeString2 (ticker, 'high', 'high_24h'),
@@ -1107,7 +1116,7 @@ module.exports = class bitget extends Exchange {
             'bidVolume': bidVolume,
             'ask': ask,
             'askVolume': askVolume,
-            'vwap': vwap,
+            'vwap': undefined,
             'open': open,
             'close': last,
             'last': last,
@@ -1309,32 +1318,8 @@ module.exports = class bitget extends Exchange {
         //         "side":"3"
         //     }
         //
-        let symbol = undefined;
         const marketId = this.safeString (trade, 'symbol');
-        let base = undefined;
-        let quote = undefined;
-        if (marketId in this.markets_by_id) {
-            market = this.markets_by_id[marketId];
-            symbol = market['symbol'];
-            base = market['base'];
-            quote = market['quote'];
-        } else if (marketId !== undefined) {
-            const parts = marketId.split ('_');
-            const numParts = parts.length;
-            if (numParts === 2) {
-                const [ baseId, quoteId ] = parts;
-                base = this.safeCurrencyCode (baseId);
-                quote = this.safeCurrencyCode (quoteId);
-                symbol = base + '/' + quote;
-            } else {
-                symbol = marketId.toUpperCase ();
-            }
-        }
-        if ((symbol === undefined) && (market !== undefined)) {
-            symbol = market['symbol'];
-            base = market['base'];
-            quote = market['quote'];
-        }
+        market = this.safeMarket (marketId, market, '_');
         let timestamp = this.safeInteger (trade, 'created_at');
         timestamp = this.safeInteger2 (trade, 'timestamp', 'ts', timestamp);
         const priceString = this.safeString (trade, 'price');
@@ -1366,7 +1351,7 @@ module.exports = class bitget extends Exchange {
         }
         let fee = undefined;
         if (feeCostString !== undefined) {
-            const feeCurrency = (side === 'buy') ? base : quote;
+            const feeCurrency = (side === 'buy') ? market['base'] : market['quote'];
             fee = {
                 // fee is either a positive number (invitation rebate)
                 // or a negative number (transaction fee deduction)
@@ -1382,7 +1367,7 @@ module.exports = class bitget extends Exchange {
             'info': trade,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'id': id,
             'order': orderId,
             'type': type,
@@ -1898,18 +1883,8 @@ module.exports = class bitget extends Exchange {
         //         type = 'swap';
         //     }
         // }
-        let symbol = undefined;
         const marketId = this.safeString (order, 'symbol');
-        if (marketId !== undefined) {
-            if (marketId in this.markets_by_id) {
-                market = this.markets_by_id[marketId];
-            } else {
-                symbol = marketId.toUpperCase ();
-            }
-        }
-        if ((symbol === undefined) && (market !== undefined)) {
-            symbol = market['symbol'];
-        }
+        market = this.safeMarket (marketId, market);
         const amount = this.safeString2 (order, 'amount', 'size');
         const filled = this.safeString2 (order, 'filled_amount', 'filled_qty');
         const cost = this.safeString (order, 'filled_cash_amount');
@@ -1933,7 +1908,7 @@ module.exports = class bitget extends Exchange {
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
             'lastTradeTimestamp': undefined,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
             'timeInForce': undefined,
             'postOnly': undefined,
@@ -1985,10 +1960,12 @@ module.exports = class bitget extends Exchange {
             const accountId = await this.getAccountId ({
                 'type': market['type'],
             });
-            method = 'apiPostOrderOrdersPlace';
+            method = 'apiPostTradeOrders';
+            request['client_oid'] = clientOrderId;
             request['account_id'] = accountId;
             request['method'] = 'place';
-            request['type'] = side + '-' + type;
+            request['side'] = side;
+            request['type'] = type;
             if (type === 'limit') {
                 request['amount'] = this.amountToPrecision (symbol, amount);
                 request['price'] = this.priceToPrecision (symbol, price);

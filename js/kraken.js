@@ -20,20 +20,19 @@ module.exports = class kraken extends Exchange {
             'certified': false,
             'pro': true,
             'has': {
+                'CORS': undefined,
                 'spot': true,
                 'margin': true,
                 'swap': false,
                 'future': false,
                 'option': false,
-                'addMargin': false,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
-                'CORS': undefined,
                 'createDepositAddress': true,
                 'createOrder': true,
-                'createReduceOnlyOrder': false,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchClosedOrders': true,
@@ -48,6 +47,7 @@ module.exports = class kraken extends Exchange {
                 'fetchIsolatedPositions': false,
                 'fetchLedger': true,
                 'fetchLedgerEntry': true,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -57,7 +57,6 @@ module.exports = class kraken extends Exchange {
                 'fetchOrderBook': true,
                 'fetchOrderTrades': 'emulated',
                 'fetchPositions': true,
-                'fetchPositionsRisk': false,
                 'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTickers': true,
@@ -65,10 +64,8 @@ module.exports = class kraken extends Exchange {
                 'fetchTrades': true,
                 'fetchTradingFees': true,
                 'fetchWithdrawals': true,
-                'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false, // Kraken only supports cross margin
-                'setPositionMode': false,
                 'withdraw': true,
             },
             'marketsByAltname': {},
@@ -482,28 +479,28 @@ module.exports = class kraken extends Exchange {
                 'contract': false,
                 'linear': undefined,
                 'inverse': undefined,
-                'maker': maker,
                 'taker': taker,
+                'maker': maker,
                 'contractSize': undefined,
                 'expiry': undefined,
                 'expiryDatetime': undefined,
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (market, 'pair_decimals'),
                     'amount': this.safeInteger (market, 'lot_decimals'),
+                    'price': this.safeInteger (market, 'pair_decimals'),
                 },
                 'limits': {
                     'leverage': {
                         'min': this.parseNumber ('1'),
-                        'max': this.safeValue (leverageBuy, leverageBuyLength - 1, 1),
+                        'max': this.safeNumber (leverageBuy, leverageBuyLength - 1, 1),
                     },
                     'amount': {
                         'min': this.safeNumber (market, 'ordermin'),
                         'max': undefined,
                     },
                     'price': {
-                        'min': this.parsePrecision (precisionPrice),
+                        'min': this.parseNumber (this.parsePrecision (precisionPrice)),
                         'max': undefined,
                     },
                     'cost': {
@@ -737,8 +734,10 @@ module.exports = class kraken extends Exchange {
     }
 
     async fetchTickers (symbols = undefined, params = {}) {
+        if (symbols === undefined) {
+            throw new ArgumentsRequired (this.id + ' fetchTickers() requires a symbols argument, an array of symbols');
+        }
         await this.loadMarkets ();
-        symbols = (symbols === undefined) ? this.symbols : symbols;
         const marketIds = [];
         for (let i = 0; i < symbols.length; i++) {
             const symbol = symbols[i];
@@ -1298,6 +1297,12 @@ module.exports = class kraken extends Exchange {
         //         "descr":{"order":"sell 167.28002676 ADAXBT @ stop loss 0.00003280 -> limit 0.00003212"}
         //     }
         //
+        //
+        //     {
+        //         "txid":["OVHMJV-BZW2V-6NZFWF"],
+        //         "descr":{"order":"sell 0.00100000 ETHUSD @ stop loss 2677.00 -> limit 2577.00 with 5:1 leverage"}
+        //     }
+        //
         const description = this.safeValue (order, 'descr', {});
         const orderDescription = this.safeString (description, 'order');
         let side = undefined;
@@ -1305,15 +1310,18 @@ module.exports = class kraken extends Exchange {
         let marketId = undefined;
         let price = undefined;
         let amount = undefined;
+        let stopPrice = undefined;
         if (orderDescription !== undefined) {
             const parts = orderDescription.split (' ');
-            const partsLength = parts.length;
             side = this.safeString (parts, 0);
             amount = this.safeString (parts, 1);
             marketId = this.safeString (parts, 2);
             type = this.safeString (parts, 4);
-            if ((type === 'limit') || (type === 'stop')) {
-                price = this.safeString (parts, partsLength - 1);
+            if (type === 'stop') {
+                stopPrice = this.safeString (parts, 6);
+                price = this.safeString (parts, 9);
+            } else if (type === 'limit') {
+                price = this.safeString (parts, 5);
             }
         }
         side = this.safeString (description, 'type', side);
@@ -1365,7 +1373,7 @@ module.exports = class kraken extends Exchange {
         }
         const clientOrderId = this.safeString (order, 'userref');
         const rawTrades = this.safeValue (order, 'trades');
-        const stopPrice = this.safeNumber (order, 'stopprice');
+        stopPrice = this.safeNumber (order, 'stopprice', stopPrice);
         return this.safeOrder ({
             'id': id,
             'clientOrderId': clientOrderId,
@@ -1724,6 +1732,27 @@ module.exports = class kraken extends Exchange {
         //         time:  1529223212,
         //       status: "Success"                                                       }
         //
+        //
+        // there can be an additional 'status-prop' field present
+        // deposit pending review by exchange => 'on-hold'
+        // the deposit is initiated by the exchange => 'return'
+        //
+        //      {
+        //          type: 'deposit',
+        //          method: 'Fidor Bank AG (Wire Transfer)',
+        //          aclass: 'currency',
+        //          asset: 'ZEUR',
+        //          refid: 'xxx-xxx-xxx',
+        //          txid: '12341234',
+        //          info: 'BANKCODEXXX',
+        //          amount: '38769.08',
+        //          fee: '0.0000',
+        //          time: 1644306552,
+        //          status: 'Success',
+        //          status-prop: 'on-hold'
+        //      }
+        //
+        //
         // fetchWithdrawals
         //
         //     { method: "Ether",
@@ -1737,6 +1766,9 @@ module.exports = class kraken extends Exchange {
         //         time:  1530481750,
         //       status: "Success"                                                             }
         //
+        // withdrawals may also have an additional 'status-prop' field present
+        //
+        //
         const id = this.safeString (transaction, 'refid');
         const txid = this.safeString (transaction, 'txid');
         const timestamp = this.safeTimestamp (transaction, 'time');
@@ -1744,7 +1776,14 @@ module.exports = class kraken extends Exchange {
         const code = this.safeCurrencyCode (currencyId, currency);
         const address = this.safeString (transaction, 'info');
         const amount = this.safeNumber (transaction, 'amount');
-        const status = this.parseTransactionStatus (this.safeString (transaction, 'status'));
+        let status = this.parseTransactionStatus (this.safeString (transaction, 'status'));
+        const statusProp = this.safeString (transaction, 'status-prop');
+        const isOnHoldDeposit = statusProp === 'on-hold';
+        const isCancellationRequest = statusProp === 'cancel-pending';
+        const isOnHoldWithdrawal = statusProp === 'onhold';
+        if (isOnHoldDeposit || isCancellationRequest || isOnHoldWithdrawal) {
+            status = 'pending';
+        }
         const type = this.safeString (transaction, 'type'); // injected from the outside
         let feeCost = this.safeNumber (transaction, 'fee');
         if (feeCost === undefined) {

@@ -23,12 +23,14 @@ class bybit extends Exchange {
             'rateLimit' => 100,
             'hostname' => 'bybit.com', // bybit.com, bytick.com
             'has' => array(
+                'CORS' => true,
+                'spot' => true,
                 'margin' => false,
                 'swap' => true,
                 'future' => true,
+                'option' => null,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
-                'CORS' => true,
                 'createOrder' => true,
                 'editOrder' => true,
                 'fetchBalance' => true,
@@ -573,9 +575,11 @@ class bybit extends Exchange {
                     '30068' => '\\ccxt\\ExchangeError', // exit value must be positive
                     '30074' => '\\ccxt\\InvalidOrder', // can't create the stop order, because you expect the order will be triggered when the LastPrice(or IndexPrice、 MarkPrice, determined by trigger_by) is raising to stop_px, but the LastPrice(or IndexPrice、 MarkPrice) is already equal to or greater than stop_px, please adjust base_price or stop_px
                     '30075' => '\\ccxt\\InvalidOrder', // can't create the stop order, because you expect the order will be triggered when the LastPrice(or IndexPrice、 MarkPrice, determined by trigger_by) is falling to stop_px, but the LastPrice(or IndexPrice、 MarkPrice) is already equal to or less than stop_px, please adjust base_price or stop_px
+                    '30078' => '\\ccxt\\ExchangeError', // array("ret_code":30078,"ret_msg":"","ext_code":"","ext_info":"","result":null,"time_now":"1644853040.916000","rate_limit_status":73,"rate_limit_reset_ms":1644853040912,"rate_limit":75)
                     // '30084' => '\\ccxt\\BadRequest', // Isolated not modified, see handleErrors below
                     '33004' => '\\ccxt\\AuthenticationError', // apikey already expired
                     '34026' => '\\ccxt\\ExchangeError', // the limit is no change
+                    '130021' => '\\ccxt\\InsufficientFunds', // array("ret_code":130021,"ret_msg":"orderfix price failed for CannotAffordOrderCost.","ext_code":"","ext_info":"","result":null,"time_now":"1644588250.204878","rate_limit_status":98,"rate_limit_reset_ms":1644588250200,"rate_limit":100)
                 ),
                 'broad' => array(
                     'unknown orderInfo' => '\\ccxt\\OrderNotFound', // array("ret_code":-1,"ret_msg":"unknown orderInfo","ext_code":"","ext_info":"","result":null,"time_now":"1584030414.005545","rate_limit_status":99,"rate_limit_reset_ms":1584030414003,"rate_limit":100)
@@ -854,10 +858,12 @@ class bybit extends Exchange {
         for ($i = 0; $i < count($markets); $i++) {
             $market = $markets[$i];
             $id = $this->safe_string_2($market, 'name', 'symbol');
-            $baseId = $this->safe_string($market, 'base_currency');
-            $quoteId = $this->safe_string($market, 'quote_currency');
+            $baseId = $this->safe_string_2($market, 'base_currency', 'baseCoin');
+            $quoteId = $this->safe_string_2($market, 'quote_currency', 'quoteCoin');
+            $settleId = $this->safe_string($market, 'settleCoin');
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
+            $settle = $this->safe_currency_code($settleId);
             $linear = (is_array($linearQuoteCurrencies) && array_key_exists($quote, $linearQuoteCurrencies));
             $inverse = !$linear;
             $symbol = $base . '/' . $quote;
@@ -883,23 +889,35 @@ class bybit extends Exchange {
             $swap = ($type === 'swap');
             $future = ($type === 'future');
             $option = ($type === 'option');
+            $contract = $swap || $future || $option;
             $result[] = array(
                 'id' => $id,
                 'symbol' => $symbol,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => $settle,
+                'baseId' => $baseId,
+                'quoteId' => $quoteId,
+                'settleId' => $settleId,
                 'active' => $active,
                 'precision' => $precision,
                 'taker' => $this->safe_number($market, 'taker_fee'),
                 'maker' => $this->safe_number($market, 'maker_fee'),
                 'type' => $type,
                 'spot' => $spot,
+                'margin' => null, // todo
+                'contract' => $contract,
+                'contractSize' => null, // todo
                 'swap' => $swap,
                 'future' => $future,
-                'futures' => $future, // * Deprecated, use $future
+                'futures' => $future, // Deprecated, use $future
                 'option' => $option,
                 'linear' => $linear,
                 'inverse' => $inverse,
+                'expiry' => null, // todo
+                'expiryDatetime' => null, // todo
+                'optionType' => null,
+                'strike' => null,
                 'limits' => array(
                     'amount' => array(
                         'min' => $this->safe_number($lotSizeFilter, 'min_trading_qty'),
@@ -1221,26 +1239,29 @@ class bybit extends Exchange {
         $method = $market['linear'] ? 'publicLinearGetFundingPrevFundingRate' : 'v2PublicGetFundingPrevFundingRate';
         $response = yield $this->$method (array_merge($request, $params));
         //
-        // {
-        //     "ret_code" => 0,
-        //     "ret_msg" => "ok",
-        //     "ext_code" => "",
-        //     "result" => array(
-        //         "symbol" => "BTCUSD",
-        //         "funding_rate" => "0.00010000",
-        //         "funding_rate_timestamp" => 1577433600
-        //     ),
-        //     "ext_info" => null,
-        //     "time_now" => "1577445586.446797",
-        //     "rate_limit_status" => 119,
-        //     "rate_limit_reset_ms" => 1577445586454,
-        //     "rate_limit" => 120
-        // }
+        //    {
+        //        "ret_code" => 0,
+        //        "ret_msg" => "ok",
+        //        "ext_code" => "",
+        //        "result" => array(
+        //            "symbol" => "BTCUSD",
+        //            "funding_rate" => "0.00010000",
+        //            "funding_rate_timestamp" => 1577433600  // v2PublicGetFundingPrevFundingRate
+        // //         "funding_rate_timestamp" => "2022-02-05T08:00:00.000Z"  // publicLinearGetFundingPrevFundingRate
+        //        ),
+        //        "ext_info" => null,
+        //        "time_now" => "1577445586.446797",
+        //        "rate_limit_status" => 119,
+        //        "rate_limit_reset_ms" => 1577445586454,
+        //        "rate_limit" => 120,
+        //    }
         //
         $result = $this->safe_value($response, 'result');
         $fundingRate = $this->safe_number($result, 'funding_rate');
-        $fundingTime = $this->safe_integer($result, 'funding_rate_timestamp') * 1000;
-        $nextFundingTime = $this->sum($fundingTime, 8 * 3600000);
+        $fundingTimestamp = $this->safe_timestamp($result, 'funding_rate_timestamp');
+        if ($fundingTimestamp === null) {
+            $fundingTimestamp = $this->parse8601($this->safe_string($result, 'funding_rate_timestamp'));
+        }
         $currentTime = $this->milliseconds();
         return array(
             'info' => $result,
@@ -1252,11 +1273,11 @@ class bybit extends Exchange {
             'timestamp' => $currentTime,
             'datetime' => $this->iso8601($currentTime),
             'fundingRate' => $fundingRate,
-            'fundingTimestamp' => $fundingTime,
-            'fundingDatetime' => $this->iso8601($fundingTime),
+            'fundingTimestamp' => $fundingTimestamp,
+            'fundingDatetime' => $this->iso8601($fundingTimestamp),
             'nextFundingRate' => null,
-            'nextFundingTimestamp' => $nextFundingTime,
-            'nextFundingDatetime' => $this->iso8601($nextFundingTime),
+            'nextFundingTimestamp' => null,
+            'nextFundingDatetime' => null,
             'previousFundingRate' => null,
             'previousFundingTimestamp' => null,
             'previousFundingDatetime' => null,
@@ -1654,7 +1675,10 @@ class bybit extends Exchange {
         $timestamp = $this->parse8601($this->safe_string($order, 'created_at'));
         $id = $this->safe_string_2($order, 'order_id', 'stop_order_id');
         $type = $this->safe_string_lower($order, 'order_type');
-        $price = $this->safe_string($order, 'price');
+        $price = null;
+        if ($type !== 'market') {
+            $price = $this->safe_string($order, 'price');
+        }
         $average = $this->safe_string($order, 'average_price');
         $amount = $this->safe_string($order, 'qty');
         $cost = $this->safe_string($order, 'cum_exec_value');
@@ -1662,12 +1686,10 @@ class bybit extends Exchange {
         $remaining = $this->safe_string($order, 'leaves_qty');
         $marketTypes = $this->safe_value($this->options, 'marketTypes', array());
         $marketType = $this->safe_string($marketTypes, $symbol);
-        if ($market !== null) {
-            if ($marketType === 'linear') {
-                $feeCurrency = $market['quote'];
-            } else {
-                $feeCurrency = $market['base'];
-            }
+        if ($marketType === 'linear') {
+            $feeCurrency = $market['quote'];
+        } else {
+            $feeCurrency = $market['base'];
         }
         $lastTradeTimestamp = $this->safe_timestamp($order, 'last_exec_time');
         if ($lastTradeTimestamp === 0) {
@@ -1675,7 +1697,7 @@ class bybit extends Exchange {
         }
         $status = $this->parse_order_status($this->safe_string_2($order, 'order_status', 'stop_order_status'));
         $side = $this->safe_string_lower($order, 'side');
-        $feeCostString = Precise::string_abs($this->safe_string($order, 'cum_exec_fee'));
+        $feeCostString = $this->safe_string($order, 'cum_exec_fee');
         $fee = null;
         if ($feeCostString !== null) {
             $fee = array(
@@ -2860,8 +2882,11 @@ class bybit extends Exchange {
             throw new ArgumentsRequired($this->id . '.setMarginMode requires a $leverage parameter');
         }
         $marginType = strtoupper($marginType);
-        if (($marginType !== 'ISOLATED') && ($marginType !== 'CROSSED')) {
-            throw new BadRequest($this->id . ' $marginType must be either isolated or crossed');
+        if ($marginType === 'CROSSED') { // * Deprecated, use 'CROSS' instead
+            $marginType = 'CROSS';
+        }
+        if (($marginType !== 'ISOLATED') && ($marginType !== 'CROSS')) {
+            throw new BadRequest($this->id . ' $marginType must be either isolated or cross');
         }
         yield $this->load_markets();
         $market = $this->market($symbol);

@@ -20,6 +20,7 @@ class btcalpha extends Exchange {
             'countries' => array( 'US' ),
             'version' => 'v1',
             'has' => array(
+                'CORS' => null,
                 'spot' => true,
                 'margin' => false,
                 'swap' => false,
@@ -31,6 +32,7 @@ class btcalpha extends Exchange {
                 'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -126,6 +128,21 @@ class btcalpha extends Exchange {
 
     public function fetch_markets($params = array ()) {
         $response = $this->publicGetPairs ($params);
+        //
+        //    array(
+        //        array(
+        //            "name" => "1INCH_USDT",
+        //            "currency1" => "1INCH",
+        //            "currency2" => "USDT",
+        //            "price_precision" => 4,
+        //            "amount_precision" => 2,
+        //            "minimum_order_size" => "0.01000000",
+        //            "maximum_order_size" => "900000.00000000",
+        //            "minimum_order_value" => "10.00000000",
+        //            "liquidity_type" => 10
+        //        ),
+        //    )
+        //
         $result = array();
         for ($i = 0; $i < count($response); $i++) {
             $market = $response[$i];
@@ -238,13 +255,8 @@ class btcalpha extends Exchange {
         //          "my_side" => "buy"
         //      }
         //
-        $symbol = null;
-        if ($market === null) {
-            $market = $this->safe_value($this->markets_by_id, $trade['pair']);
-        }
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $marketId = $this->safe_string($trade, 'pair');
+        $market = $this->safe_market($marketId, $market, '_');
         $timestamp = $this->safe_timestamp($trade, 'timestamp');
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'amount');
@@ -255,7 +267,7 @@ class btcalpha extends Exchange {
             'info' => $trade,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'order' => $id,
             'type' => 'limit',
             'side' => $side,

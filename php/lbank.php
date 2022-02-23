@@ -17,19 +17,49 @@ class lbank extends Exchange {
             'countries' => array( 'CN' ),
             'version' => 'v1',
             'has' => array(
+                'CORS' => null,
+                'spot' => true,
+                'margin' => false,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
+                'addMargin' => false,
                 'cancelOrder' => true,
                 'createOrder' => true,
+                'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
+                'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
+                'fetchBorrowRateHistory' => false,
+                'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
                 'fetchClosedOrders' => true,
+                'fetchFundingHistory' => false,
+                'fetchFundingRate' => false,
+                'fetchFundingRateHistory' => false,
+                'fetchFundingRates' => false,
+                'fetchIndexOHLCV' => false,
+                'fetchIsolatedPositions' => false,
+                'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
+                'fetchMarkOHLCV' => false,
                 'fetchOHLCV' => true,
                 'fetchOpenOrders' => null, // status 0 API doesn't work
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
                 'fetchOrders' => true,
+                'fetchPosition' => false,
+                'fetchPositions' => false,
+                'fetchPositionsRisk' => false,
+                'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
+                'reduceMargin' => false,
+                'setLeverage' => false,
+                'setMarginMode' => false,
+                'setPositionMode' => false,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -100,6 +130,17 @@ class lbank extends Exchange {
 
     public function fetch_markets($params = array ()) {
         $response = $this->publicGetAccuracy ($params);
+        //
+        //    array(
+        //        array(
+        //            "symbol" => "btc_usdt",
+        //            "quantityAccuracy" => "4",
+        //            "minTranQua" => "0.0001",
+        //            "priceAccuracy" => "2"
+        //        ),
+        //        ...
+        //    )
+        //
         $result = array();
         for ($i = 0; $i < count($response); $i++) {
             $market = $response[$i];
@@ -118,30 +159,46 @@ class lbank extends Exchange {
             }
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $symbol = $base . '/' . $quote;
-            $precision = array(
-                'amount' => $this->safe_integer($market, 'quantityAccuracy'),
-                'price' => $this->safe_integer($market, 'priceAccuracy'),
-            );
             $result[] = array(
                 'id' => $id,
-                'symbol' => $symbol,
+                'symbol' => $base . '/' . $quote,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
+                'settleId' => null,
                 'type' => 'spot',
                 'spot' => true,
+                'margin' => false,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
                 'active' => true,
-                'precision' => $precision,
+                'contract' => false,
+                'linear' => null,
+                'inverse' => null,
+                'contractSize' => null,
+                'expiry' => null,
+                'expiryDatetime' => null,
+                'strike' => null,
+                'optionType' => null,
+                'precision' => array(
+                    'amount' => $this->safe_integer($market, 'quantityAccuracy'),
+                    'price' => $this->safe_integer($market, 'priceAccuracy'),
+                ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
                     'amount' => array(
-                        'min' => pow(10, -$precision['amount']),
+                        'min' => null,
                         'max' => null,
                     ),
                     'price' => array(
-                        'min' => pow(10, -$precision['price']),
-                        'max' => pow(10, $precision['price']),
+                        'min' => null,
+                        'max' => null,
                     ),
                     'cost' => array(
                         'min' => null,
@@ -253,10 +310,7 @@ class lbank extends Exchange {
     }
 
     public function parse_trade($trade, $market = null) {
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         $timestamp = $this->safe_integer($trade, 'date_ms');
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'amount');
@@ -272,7 +326,7 @@ class lbank extends Exchange {
             'info' => $this->safe_value($trade, 'info', $trade),
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'order' => null,
             'type' => $type,
             'side' => $side,

@@ -22,14 +22,22 @@ class bitget extends Exchange {
             'version' => 'v3',
             'rateLimit' => 1000, // up to 3000 requests per 5 minutes ≈ 600 requests per minute ≈ 10 requests per second ≈ 100 ms
             'has' => array(
-                'fetchPositions' => true,
-                'fetchPosition' => true,
+                'CORS' => null,
+                'spot' => true,
+                'margin' => false,
+                'swap' => null, // has but unimplemented
+                'future' => null, // has but unimplemented
+                'option' => false,
                 'cancelOrder' => true,
                 'cancelOrders' => true,
-                'CORS' => null,
                 'createOrder' => true,
                 'fetchAccounts' => true,
                 'fetchBalance' => true,
+                'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
+                'fetchBorrowRateHistory' => false,
+                'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
                 'fetchClosedOrders' => true,
                 'fetchCurrencies' => true,
                 'fetchDeposits' => true,
@@ -40,6 +48,8 @@ class bitget extends Exchange {
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
                 'fetchOrderTrades' => true,
+                'fetchPosition' => true,
+                'fetchPositions' => true,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTime' => true,
@@ -105,6 +115,7 @@ class bitget extends Exchange {
                         'order/deposit_withdraw', // Query assets history
                     ),
                     'post' => array(
+                        'trade/orders', // Place trade order
                         'order/orders/place', // Place order
                         'order/orders/{order_id}/submitcancel', // Request to cancel an order request
                         'order/orders/batchcancel', // Bulk order cancellation
@@ -689,6 +700,9 @@ class bitget extends Exchange {
                 ),
             ),
             'precisionMode' => TICK_SIZE,
+            'commonCurrencies' => array(
+                'JADE' => 'Jade Protocol',
+            ),
             'options' => array(
                 'createMarketBuyOrderRequiresPrice' => true,
                 'fetchMarkets' => array(
@@ -803,27 +817,20 @@ class bitget extends Exchange {
         $marketType = 'spot';
         $spot = true;
         $swap = false;
-        $baseId = $this->safe_string_2($market, 'base_currency', 'coin');
+        $baseId = $this->safe_string_2($market, 'base_currency', 'underlying_index');
         $quoteId = $this->safe_string($market, 'quote_currency');
+        $settleId = $this->safe_string($market, 'coin');
         $contractVal = $this->safe_number($market, 'contract_val');
+        $base = $this->safe_currency_code($baseId);
+        $quote = $this->safe_currency_code($quoteId);
+        $settle = $this->safe_currency_code($settleId);
+        $symbol = $base . '/' . $quote;
         if ($contractVal !== null) {
             $marketType = 'swap';
             $spot = false;
             $swap = true;
+            $symbol = $symbol . ':' . $settle;
         }
-        $base = $this->safe_currency_code($baseId);
-        $quote = $this->safe_currency_code($quoteId);
-        $symbol = strtoupper($id);
-        if ($spot) {
-            $symbol = $base . '/' . $quote;
-        }
-        $tickSize = $this->safe_string($market, 'tick_size');
-        $sizeIncrement = $this->safe_string($market, 'size_increment');
-        $precision = array(
-            'amount' => $this->parse_number($this->parse_precision($sizeIncrement)),
-            'price' => $this->parse_number($this->parse_precision($tickSize)),
-        );
-        $minAmount = $this->safe_number_2($market, 'min_size', 'base_min_size');
         $status = $this->safe_string($market, 'status');
         $active = null;
         if ($status !== null) {
@@ -835,28 +842,49 @@ class bitget extends Exchange {
             'symbol' => $symbol,
             'base' => $base,
             'quote' => $quote,
+            'settle' => $settle,
             'baseId' => $baseId,
             'quoteId' => $quoteId,
-            'info' => $market,
+            'settleId' => $settleId,
             'type' => $marketType,
             'spot' => $spot,
+            'margin' => false,
             'swap' => $swap,
+            'future' => false,
+            'option' => false,
             'active' => $active,
-            'precision' => $precision,
+            'contract' => $swap,
+            'linear' => ($base === $settle),
+            'inverse' => ($quote === $settle),
+            'contractSize' => $contractVal,
+            'expiry' => null,
+            'expiryDatetime' => null,
+            'strike' => null,
+            'optionType' => null,
+            'precision' => array(
+                'amount' => $this->parse_number($this->parse_precision($this->safe_string($market, 'size_increment'))),
+                'price' => $this->parse_number($this->parse_precision($this->safe_string($market, 'tick_size'))),
+                'base' => $this->parse_number($this->parse_precision($this->safe_string($market, 'base_asset_precision'))),
+            ),
             'limits' => array(
+                'leverage' => array(
+                    'min' => null,
+                    'max' => null,
+                ),
                 'amount' => array(
-                    'min' => $minAmount,
+                    'min' => $this->safe_number_2($market, 'min_size', 'base_min_size'),
                     'max' => null,
                 ),
                 'price' => array(
-                    'min' => $precision['price'],
+                    'min' => null,
                     'max' => null,
                 ),
                 'cost' => array(
-                    'min' => $precision['price'],
+                    'min' => null,
                     'max' => null,
                 ),
             ),
+            'info' => $market,
         ));
     }
 
@@ -1060,26 +1088,8 @@ class bitget extends Exchange {
         //     }
         //
         $timestamp = $this->safe_integer_2($ticker, 'timestamp', 'id');
-        $symbol = null;
         $marketId = $this->safe_string_2($ticker, 'instrument_id', 'symbol');
-        if (is_array($this->markets_by_id) && array_key_exists($marketId, $this->markets_by_id)) {
-            $market = $this->markets_by_id[$marketId];
-            $symbol = $market['symbol'];
-        } else if ($marketId !== null) {
-            $parts = explode('_', $marketId);
-            $numParts = is_array($parts) ? count($parts) : 0;
-            if ($numParts === 2) {
-                list($baseId, $quoteId) = $parts;
-                $base = $this->safe_currency_code($baseId);
-                $quote = $this->safe_currency_code($quoteId);
-                $symbol = $base . '/' . $quote;
-            } else {
-                $symbol = $marketId;
-            }
-        }
-        if (($symbol === null) && ($market !== null)) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market($marketId, $market, '_');
         $last = $this->safe_string_2($ticker, 'last', 'close');
         $open = $this->safe_string($ticker, 'open');
         $bidVolume = null;
@@ -1100,9 +1110,8 @@ class bitget extends Exchange {
         }
         $baseVolume = $this->safe_string_2($ticker, 'amount', 'volume_24h');
         $quoteVolume = $this->safe_string($ticker, 'vol');
-        $vwap = $this->vwap($baseVolume, $quoteVolume);
         return $this->safe_ticker(array(
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
             'high' => $this->safe_string_2($ticker, 'high', 'high_24h'),
@@ -1111,7 +1120,7 @@ class bitget extends Exchange {
             'bidVolume' => $bidVolume,
             'ask' => $ask,
             'askVolume' => $askVolume,
-            'vwap' => $vwap,
+            'vwap' => null,
             'open' => $open,
             'close' => $last,
             'last' => $last,
@@ -1313,32 +1322,8 @@ class bitget extends Exchange {
         //         "side":"3"
         //     }
         //
-        $symbol = null;
         $marketId = $this->safe_string($trade, 'symbol');
-        $base = null;
-        $quote = null;
-        if (is_array($this->markets_by_id) && array_key_exists($marketId, $this->markets_by_id)) {
-            $market = $this->markets_by_id[$marketId];
-            $symbol = $market['symbol'];
-            $base = $market['base'];
-            $quote = $market['quote'];
-        } else if ($marketId !== null) {
-            $parts = explode('_', $marketId);
-            $numParts = is_array($parts) ? count($parts) : 0;
-            if ($numParts === 2) {
-                list($baseId, $quoteId) = $parts;
-                $base = $this->safe_currency_code($baseId);
-                $quote = $this->safe_currency_code($quoteId);
-                $symbol = $base . '/' . $quote;
-            } else {
-                $symbol = strtoupper($marketId);
-            }
-        }
-        if (($symbol === null) && ($market !== null)) {
-            $symbol = $market['symbol'];
-            $base = $market['base'];
-            $quote = $market['quote'];
-        }
+        $market = $this->safe_market($marketId, $market, '_');
         $timestamp = $this->safe_integer($trade, 'created_at');
         $timestamp = $this->safe_integer_2($trade, 'timestamp', 'ts', $timestamp);
         $priceString = $this->safe_string($trade, 'price');
@@ -1370,7 +1355,7 @@ class bitget extends Exchange {
         }
         $fee = null;
         if ($feeCostString !== null) {
-            $feeCurrency = ($side === 'buy') ? $base : $quote;
+            $feeCurrency = ($side === 'buy') ? $market['base'] : $market['quote'];
             $fee = array(
                 // $fee is either a positive number (invitation rebate)
                 // or a negative number (transaction $fee deduction)
@@ -1386,7 +1371,7 @@ class bitget extends Exchange {
             'info' => $trade,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'id' => $id,
             'order' => $orderId,
             'type' => $type,
@@ -1902,18 +1887,8 @@ class bitget extends Exchange {
         //         $type = 'swap';
         //     }
         // }
-        $symbol = null;
         $marketId = $this->safe_string($order, 'symbol');
-        if ($marketId !== null) {
-            if (is_array($this->markets_by_id) && array_key_exists($marketId, $this->markets_by_id)) {
-                $market = $this->markets_by_id[$marketId];
-            } else {
-                $symbol = strtoupper($marketId);
-            }
-        }
-        if (($symbol === null) && ($market !== null)) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market($marketId, $market);
         $amount = $this->safe_string_2($order, 'amount', 'size');
         $filled = $this->safe_string_2($order, 'filled_amount', 'filled_qty');
         $cost = $this->safe_string($order, 'filled_cash_amount');
@@ -1937,7 +1912,7 @@ class bitget extends Exchange {
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
             'lastTradeTimestamp' => null,
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'type' => $type,
             'timeInForce' => null,
             'postOnly' => null,
@@ -1989,10 +1964,12 @@ class bitget extends Exchange {
             $accountId = yield $this->get_account_id(array(
                 'type' => $market['type'],
             ));
-            $method = 'apiPostOrderOrdersPlace';
+            $method = 'apiPostTradeOrders';
+            $request['client_oid'] = $clientOrderId;
             $request['account_id'] = $accountId;
             $request['method'] = 'place';
-            $request['type'] = $side . '-' . $type;
+            $request['side'] = $side;
+            $request['type'] = $type;
             if ($type === 'limit') {
                 $request['amount'] = $this->amount_to_precision($symbol, $amount);
                 $request['price'] = $this->price_to_precision($symbol, $price);

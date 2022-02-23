@@ -270,8 +270,16 @@ def test_positions(exchange, symbol):
             return
         delay = int(exchange.rateLimit / 1000)
         time.sleep(delay)
-        # dump(green(exchange.id), green(symbol), 'fetching positions...')
+        # without symbol
+        dump(green(exchange.id), 'fetching positions...')
         positions = exchange.fetch_positions()
+        for position in positions:
+            test_position(exchange, position, None, int(time.time() * 1000))
+        dump(green(exchange.id), 'fetched', green(len(positions)), 'positions')
+
+        # with symbol
+        dump(green(exchange.id), green(symbol), 'fetching positions...')
+        positions = exchange.fetch_positions([symbol])
         for position in positions:
             test_position(exchange, position, symbol, int(time.time() * 1000))
         dump(green(exchange.id), green(symbol), 'fetched', green(len(positions)), 'positions')
@@ -359,11 +367,22 @@ def load_exchange(exchange):
     exchange.load_markets()
 
 
+def get_test_symbol(exchange, symbols):
+    symbol = None
+    for s in symbols:
+        market = exchange.safe_value(exchange.markets, s)
+        if market is not None:
+            active = exchange.safe_value(market, 'active')
+            if active or (active is None):
+                symbol = s
+                break
+    return symbol
+
+
 def test_exchange(exchange, symbol=None):
 
     dump(green('EXCHANGE: ' + exchange.id))
     # delay = 2
-    keys = list(exchange.markets.keys())
 
     # ..........................................................................
     # public API
@@ -407,8 +426,7 @@ def test_exchange(exchange, symbol=None):
             code = codes[i]
 
     if not symbol:
-        symbol = keys[0]
-        symbols = [
+        symbol = get_test_symbol(exchange, [
             'BTC/USD',
             'BTC/USDT',
             'BTC/CNY',
@@ -419,12 +437,34 @@ def test_exchange(exchange, symbol=None):
             'BTC/JPY',
             'LTC/BTC',
             'USD/SLL',
-        ]
+        ])
 
-        for s in symbols:
-            if s in keys:
-                symbol = s
-                break
+        if symbol is None:
+            for code in codes:
+                markets = list(exchange.markets.values())
+                activeMarkets = [market for market in markets if market['base'] == code]
+                if len(activeMarkets):
+                    activeSymbols = [market['symbol'] for market in activeMarkets]
+                    symbol = get_test_symbol(exchange, activeSymbols)
+                    break
+
+        if symbol is None:
+            markets = list(exchange.markets.values())
+            activeMarkets = [market for market in markets if market['base'] in codes]
+            activeSymbols = [market['symbol'] for market in activeMarkets]
+            symbol = get_test_symbol(exchange, activeSymbols)
+
+        if symbol is None:
+            markets = list(exchange.markets.values())
+            activeMarkets = [market for market in markets if not exchange.safe_value(market, 'active', False)]
+            activeSymbols = [market['symbol'] for market in activeMarkets]
+            symbol = get_test_symbol(exchange, activeSymbols)
+
+        if symbol is None:
+            symbol = get_test_symbol(exchange, exchange.symbols)
+
+        if symbol is None:
+            symbol = exchange.symbols[0]
 
     if symbol.find('.d') < 0:
         test_symbol(exchange, symbol, code)

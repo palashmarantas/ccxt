@@ -23,13 +23,23 @@ module.exports = class oceanex extends Exchange {
                 'referral': 'https://oceanex.pro/signup?referral=VE24QX',
             },
             'has': {
+                'CORS': undefined,
+                'spot': true,
+                'margin': false,
+                'swap': undefined, // has but unimplemented
+                'future': undefined,
+                'option': undefined,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'cancelOrders': true,
                 'createMarketOrder': true,
                 'createOrder': true,
-                'fetchAllTradingFees': true,
                 'fetchBalance': true,
+                'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
+                'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': true,
                 'fetchFundingFees': undefined,
                 'fetchMarkets': true,
@@ -43,7 +53,8 @@ module.exports = class oceanex extends Exchange {
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
-                'fetchTradingFees': undefined,
+                'fetchTradingFee': undefined,
+                'fetchTradingFees': true,
                 'fetchTradingLimits': undefined,
             },
             'timeframes': {
@@ -131,6 +142,19 @@ module.exports = class oceanex extends Exchange {
     async fetchMarkets (params = {}) {
         const request = { 'show_details': true };
         const response = await this.publicGetMarkets (this.extend (request, params));
+        //
+        //    {
+        //        id: 'xtzusdt',
+        //        name: 'XTZ/USDT',
+        //        ask_precision: '8',
+        //        bid_precision: '8',
+        //        enabled: true,
+        //        price_precision: '4',
+        //        amount_precision: '3',
+        //        usd_precision: '4',
+        //        minimum_trading_amount: '1.0'
+        //    },
+        //
         const result = [];
         const markets = this.safeValue (response, 'data');
         for (let i = 0; i < markets.length; i++) {
@@ -148,26 +172,25 @@ module.exports = class oceanex extends Exchange {
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': undefined,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': undefined,
                 'type': 'spot',
                 'spot': true,
                 'margin': false,
-                'future': false,
                 'swap': false,
+                'future': false,
                 'option': false,
-                'optionType': undefined,
-                'strike': undefined,
+                'active': undefined,
+                'contract': false,
                 'linear': undefined,
                 'inverse': undefined,
-                'contract': false,
                 'contractSize': undefined,
-                'settle': undefined,
-                'settleId': undefined,
                 'expiry': undefined,
                 'expiryDatetime': undefined,
-                'active': undefined,
-                'info': market,
+                'strike': undefined,
+                'optionType': undefined,
                 'precision': {
                     'amount': this.safeInteger (market, 'amount_precision'),
                     'price': this.safeInteger (market, 'price_precision'),
@@ -175,6 +198,10 @@ module.exports = class oceanex extends Exchange {
                     'quote': this.safeInteger (market, 'bid_precision'),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
                     'amount': {
                         'min': undefined,
                         'max': undefined,
@@ -188,6 +215,7 @@ module.exports = class oceanex extends Exchange {
                         'max': undefined,
                     },
                 },
+                'info': market,
             });
         }
         return result;
@@ -433,7 +461,7 @@ module.exports = class oceanex extends Exchange {
         return this.safeTimestamp (response, 'data');
     }
 
-    async fetchAllTradingFees (params = {}) {
+    async fetchTradingFees (params = {}) {
         const response = await this.publicGetFeesTrading (params);
         const data = this.safeValue (response, 'data');
         const result = {};

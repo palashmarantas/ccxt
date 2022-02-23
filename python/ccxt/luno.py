@@ -19,23 +19,51 @@ class luno(Exchange):
             'rateLimit': 1000,
             'version': '1',
             'has': {
-                'cancelOrder': True,
                 'CORS': None,
+                'spot': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
+                'cancelOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchAccounts': True,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchClosedOrders': True,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchIsolatedPositions': False,
                 'fetchLedger': True,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrders': True,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
                 'fetchTradingFees': True,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
             },
             'urls': {
                 'referral': 'https://www.luno.com/invite/44893A',
@@ -108,6 +136,14 @@ class luno(Exchange):
                     ],
                 },
             },
+            'fees': {
+                'trading': {
+                    'tierBased': True,  # based on volume from your primary currency(not the same for everyone)
+                    'percentage': True,
+                    'taker': self.parse_number('0.001'),
+                    'maker': self.parse_number('0'),
+                },
+            },
         })
 
     def fetch_markets(self, params={}):
@@ -140,39 +176,40 @@ class luno(Exchange):
             quoteId = self.safe_string(market, 'counter_currency')
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            symbol = base + '/' + quote
             status = self.safe_string(market, 'trading_status')
-            active = (status == 'ACTIVE')
-            precision = {
-                'amount': self.safe_integer(market, 'volume_scale'),
-                'price': self.safe_integer(market, 'price_scale'),
-            }
             result.append({
                 'id': id,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
                 'margin': False,
-                'future': False,
                 'swap': False,
+                'future': False,
                 'option': False,
-                'optionType': None,
-                'strike': None,
+                'active': (status == 'ACTIVE'),
+                'contract': False,
                 'linear': None,
                 'inverse': None,
-                'contract': False,
                 'contractSize': None,
-                'settle': None,
-                'settleId': None,
                 'expiry': None,
                 'expiryDatetime': None,
-                'active': active,
-                'precision': precision,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': self.safe_integer(market, 'volume_scale'),
+                    'price': self.safe_integer(market, 'price_scale'),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': self.safe_number(market, 'min_volume'),
                         'max': self.safe_number(market, 'max_volume'),
@@ -296,22 +333,24 @@ class luno(Exchange):
         elif (orderType == 'BID') or (orderType == 'BUY'):
             side = 'buy'
         marketId = self.safe_string(order, 'pair')
-        symbol = self.safe_symbol(marketId, market)
+        market = self.safe_market(marketId, market)
         price = self.safe_string(order, 'limit_price')
         amount = self.safe_string(order, 'limit_volume')
         quoteFee = self.safe_number(order, 'fee_counter')
         baseFee = self.safe_number(order, 'fee_base')
         filled = self.safe_string(order, 'base')
         cost = self.safe_string(order, 'counter')
-        fee = {'currency': None}
-        if quoteFee:
-            fee['cost'] = quoteFee
-            if market is not None:
-                fee['currency'] = market['quote']
-        else:
-            fee['cost'] = baseFee
-            if market is not None:
-                fee['currency'] = market['base']
+        fee = None
+        if quoteFee is not None:
+            fee = {
+                'cost': quoteFee,
+                'currency': market['quote'],
+            }
+        elif baseFee is not None:
+            fee = {
+                'cost': baseFee,
+                'currency': market['base'],
+            }
         id = self.safe_string(order, 'order_id')
         return self.safe_order({
             'id': id,
@@ -320,7 +359,7 @@ class luno(Exchange):
             'timestamp': timestamp,
             'lastTradeTimestamp': None,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': None,
             'timeInForce': None,
             'postOnly': None,

@@ -38,14 +38,22 @@ class bitget(Exchange):
             'version': 'v3',
             'rateLimit': 1000,  # up to 3000 requests per 5 minutes ≈ 600 requests per minute ≈ 10 requests per second ≈ 100 ms
             'has': {
-                'fetchPositions': True,
-                'fetchPosition': True,
+                'CORS': None,
+                'spot': True,
+                'margin': False,
+                'swap': None,  # has but unimplemented
+                'future': None,  # has but unimplemented
+                'option': False,
                 'cancelOrder': True,
                 'cancelOrders': True,
-                'CORS': None,
                 'createOrder': True,
                 'fetchAccounts': True,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDeposits': True,
@@ -56,6 +64,8 @@ class bitget(Exchange):
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrderTrades': True,
+                'fetchPosition': True,
+                'fetchPositions': True,
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTime': True,
@@ -121,6 +131,7 @@ class bitget(Exchange):
                         'order/deposit_withdraw',  # Query assets history
                     ],
                     'post': [
+                        'trade/orders',  # Place trade order
                         'order/orders/place',  # Place order
                         'order/orders/{order_id}/submitcancel',  # Request to cancel an order request
                         'order/orders/batchcancel',  # Bulk order cancellation
@@ -705,6 +716,9 @@ class bitget(Exchange):
                 },
             },
             'precisionMode': TICK_SIZE,
+            'commonCurrencies': {
+                'JADE': 'Jade Protocol',
+            },
             'options': {
                 'createMarketBuyOrderRequiresPrice': True,
                 'fetchMarkets': [
@@ -812,25 +826,19 @@ class bitget(Exchange):
         marketType = 'spot'
         spot = True
         swap = False
-        baseId = self.safe_string_2(market, 'base_currency', 'coin')
+        baseId = self.safe_string_2(market, 'base_currency', 'underlying_index')
         quoteId = self.safe_string(market, 'quote_currency')
+        settleId = self.safe_string(market, 'coin')
         contractVal = self.safe_number(market, 'contract_val')
+        base = self.safe_currency_code(baseId)
+        quote = self.safe_currency_code(quoteId)
+        settle = self.safe_currency_code(settleId)
+        symbol = base + '/' + quote
         if contractVal is not None:
             marketType = 'swap'
             spot = False
             swap = True
-        base = self.safe_currency_code(baseId)
-        quote = self.safe_currency_code(quoteId)
-        symbol = id.upper()
-        if spot:
-            symbol = base + '/' + quote
-        tickSize = self.safe_string(market, 'tick_size')
-        sizeIncrement = self.safe_string(market, 'size_increment')
-        precision = {
-            'amount': self.parse_number(self.parse_precision(sizeIncrement)),
-            'price': self.parse_number(self.parse_precision(tickSize)),
-        }
-        minAmount = self.safe_number_2(market, 'min_size', 'base_min_size')
+            symbol = symbol + ':' + settle
         status = self.safe_string(market, 'status')
         active = None
         if status is not None:
@@ -841,28 +849,49 @@ class bitget(Exchange):
             'symbol': symbol,
             'base': base,
             'quote': quote,
+            'settle': settle,
             'baseId': baseId,
             'quoteId': quoteId,
-            'info': market,
+            'settleId': settleId,
             'type': marketType,
             'spot': spot,
+            'margin': False,
             'swap': swap,
+            'future': False,
+            'option': False,
             'active': active,
-            'precision': precision,
+            'contract': swap,
+            'linear': (base == settle),
+            'inverse': (quote == settle),
+            'contractSize': contractVal,
+            'expiry': None,
+            'expiryDatetime': None,
+            'strike': None,
+            'optionType': None,
+            'precision': {
+                'amount': self.parse_number(self.parse_precision(self.safe_string(market, 'size_increment'))),
+                'price': self.parse_number(self.parse_precision(self.safe_string(market, 'tick_size'))),
+                'base': self.parse_number(self.parse_precision(self.safe_string(market, 'base_asset_precision'))),
+            },
             'limits': {
+                'leverage': {
+                    'min': None,
+                    'max': None,
+                },
                 'amount': {
-                    'min': minAmount,
+                    'min': self.safe_number_2(market, 'min_size', 'base_min_size'),
                     'max': None,
                 },
                 'price': {
-                    'min': precision['price'],
+                    'min': None,
                     'max': None,
                 },
                 'cost': {
-                    'min': precision['price'],
+                    'min': None,
                     'max': None,
                 },
             },
+            'info': market,
         })
 
     def fetch_markets_by_type(self, type, params={}):
@@ -1059,23 +1088,8 @@ class bitget(Exchange):
         #     }
         #
         timestamp = self.safe_integer_2(ticker, 'timestamp', 'id')
-        symbol = None
         marketId = self.safe_string_2(ticker, 'instrument_id', 'symbol')
-        if marketId in self.markets_by_id:
-            market = self.markets_by_id[marketId]
-            symbol = market['symbol']
-        elif marketId is not None:
-            parts = marketId.split('_')
-            numParts = len(parts)
-            if numParts == 2:
-                baseId, quoteId = parts
-                base = self.safe_currency_code(baseId)
-                quote = self.safe_currency_code(quoteId)
-                symbol = base + '/' + quote
-            else:
-                symbol = marketId
-        if (symbol is None) and (market is not None):
-            symbol = market['symbol']
+        market = self.safe_market(marketId, market, '_')
         last = self.safe_string_2(ticker, 'last', 'close')
         open = self.safe_string(ticker, 'open')
         bidVolume = None
@@ -1094,9 +1108,8 @@ class bitget(Exchange):
             ask = self.safe_string(ask, 0)
         baseVolume = self.safe_string_2(ticker, 'amount', 'volume_24h')
         quoteVolume = self.safe_string(ticker, 'vol')
-        vwap = self.vwap(baseVolume, quoteVolume)
         return self.safe_ticker({
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'high': self.safe_string_2(ticker, 'high', 'high_24h'),
@@ -1105,7 +1118,7 @@ class bitget(Exchange):
             'bidVolume': bidVolume,
             'ask': ask,
             'askVolume': askVolume,
-            'vwap': vwap,
+            'vwap': None,
             'open': open,
             'close': last,
             'last': last,
@@ -1299,29 +1312,8 @@ class bitget(Exchange):
         #         "side":"3"
         #     }
         #
-        symbol = None
         marketId = self.safe_string(trade, 'symbol')
-        base = None
-        quote = None
-        if marketId in self.markets_by_id:
-            market = self.markets_by_id[marketId]
-            symbol = market['symbol']
-            base = market['base']
-            quote = market['quote']
-        elif marketId is not None:
-            parts = marketId.split('_')
-            numParts = len(parts)
-            if numParts == 2:
-                baseId, quoteId = parts
-                base = self.safe_currency_code(baseId)
-                quote = self.safe_currency_code(quoteId)
-                symbol = base + '/' + quote
-            else:
-                symbol = marketId.upper()
-        if (symbol is None) and (market is not None):
-            symbol = market['symbol']
-            base = market['base']
-            quote = market['quote']
+        market = self.safe_market(marketId, market, '_')
         timestamp = self.safe_integer(trade, 'created_at')
         timestamp = self.safe_integer_2(trade, 'timestamp', 'ts', timestamp)
         priceString = self.safe_string(trade, 'price')
@@ -1350,7 +1342,7 @@ class bitget(Exchange):
             feeCostString = Precise.string_neg(feeCostString)
         fee = None
         if feeCostString is not None:
-            feeCurrency = base if (side == 'buy') else quote
+            feeCurrency = market['base'] if (side == 'buy') else market['quote']
             fee = {
                 # fee is either a positive number(invitation rebate)
                 # or a negative number(transaction fee deduction)
@@ -1365,7 +1357,7 @@ class bitget(Exchange):
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'id': id,
             'order': orderId,
             'type': type,
@@ -1843,15 +1835,8 @@ class bitget(Exchange):
         #         type = 'swap'
         #     }
         # }
-        symbol = None
         marketId = self.safe_string(order, 'symbol')
-        if marketId is not None:
-            if marketId in self.markets_by_id:
-                market = self.markets_by_id[marketId]
-            else:
-                symbol = marketId.upper()
-        if (symbol is None) and (market is not None):
-            symbol = market['symbol']
+        market = self.safe_market(marketId, market)
         amount = self.safe_string_2(order, 'amount', 'size')
         filled = self.safe_string_2(order, 'filled_amount', 'filled_qty')
         cost = self.safe_string(order, 'filled_cash_amount')
@@ -1874,7 +1859,7 @@ class bitget(Exchange):
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
             'lastTradeTimestamp': None,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
             'timeInForce': None,
             'postOnly': None,
@@ -1925,10 +1910,12 @@ class bitget(Exchange):
             accountId = self.get_account_id({
                 'type': market['type'],
             })
-            method = 'apiPostOrderOrdersPlace'
+            method = 'apiPostTradeOrders'
+            request['client_oid'] = clientOrderId
             request['account_id'] = accountId
             request['method'] = 'place'
-            request['type'] = side + '-' + type
+            request['side'] = side
+            request['type'] = type
             if type == 'limit':
                 request['amount'] = self.amount_to_precision(symbol, amount)
                 request['price'] = self.price_to_precision(symbol, price)

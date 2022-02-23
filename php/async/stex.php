@@ -22,6 +22,7 @@ class stex extends Exchange {
             'certified' => false,
             // new metainfo interface
             'has' => array(
+                'CORS' => null,
                 'spot' => true,
                 'margin' => false,
                 'swap' => false,
@@ -30,13 +31,13 @@ class stex extends Exchange {
                 'addMargin' => false,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
-                'CORS' => null,
                 'createDepositAddress' => true,
                 'createMarketOrder' => null, // limit orders only
                 'createOrder' => true,
                 'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -52,6 +53,7 @@ class stex extends Exchange {
                 'fetchIndexOHLCV' => false,
                 'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
@@ -337,7 +339,10 @@ class stex extends Exchange {
                 'fee' => $fee,
                 'precision' => intval($precision),
                 'limits' => array(
-                    'amount' => array( 'min' => $this->parse_number($amountLimit), 'max' => null ),
+                    'amount' => array(
+                        'min' => $this->parse_number($amountLimit),
+                        'max' => null,
+                    ),
                     'deposit' => array(
                         'min' => $this->safe_number($currency, 'minimum_deposit_amount'),
                         'max' => null,
@@ -434,8 +439,8 @@ class stex extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($market, 'market_precision'),
                     'amount' => $this->safe_integer($market, 'currency_precision'),
+                    'price' => $this->safe_integer($market, 'market_precision'),
                 ),
                 'limits' => array(
                     'leverage' => array(

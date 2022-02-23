@@ -18,6 +18,7 @@ module.exports = class poloniex extends Exchange {
             'certified': false,
             'pro': true,
             'has': {
+                'CORS': undefined,
                 'spot': true,
                 'margin': undefined, // has but not fully implemented
                 'swap': undefined, // has but not fully implemented
@@ -25,7 +26,6 @@ module.exports = class poloniex extends Exchange {
                 'option': undefined,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
-                'CORS': undefined,
                 'createDepositAddress': true,
                 'createMarketOrder': undefined,
                 'createOrder': true,
@@ -223,7 +223,7 @@ module.exports = class poloniex extends Exchange {
                 },
                 'broad': {
                     'Total must be at least': InvalidOrder, // {"error":"Total must be at least 0.0001."}
-                    'This account is frozen.': AccountSuspended,
+                    'This account is frozen': AccountSuspended, // {"error":"This account is frozen for trading."} || {"error":"This account is frozen."}
                     'This account is locked.': AccountSuspended, // {"error":"This account is locked."}
                     'Not enough': InsufficientFunds,
                     'Nonce must be greater': InvalidNonce,
@@ -339,8 +339,8 @@ module.exports = class poloniex extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': 8,
-                    'amount': 8,
+                    'amount': parseInt ('8'),
+                    'price': parseInt ('8'),
                 },
                 'limits': this.extend (this.limits, {
                     'leverage': {
@@ -1220,7 +1220,8 @@ module.exports = class poloniex extends Exchange {
         const response = await this.privatePostGenerateNewAddress (this.extend (request, params));
         let address = undefined;
         let tag = undefined;
-        if (response['success'] === 1) {
+        const success = this.safeString (response, 'success');
+        if (success === '1') {
             address = this.safeString (response, 'response');
         }
         this.checkAddress (address);

@@ -14,6 +14,7 @@ from ccxt.base.errors import BadSymbol
 from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.decimal_to_precision import TICK_SIZE
+from ccxt.base.precise import Precise
 
 
 class ascendex(Exchange):
@@ -27,15 +28,15 @@ class ascendex(Exchange):
             'certified': True,
             # new metainfo interface
             'has': {
+                'CORS': None,
                 'spot': True,
-                'margin': None,
+                'margin': None,  # has but not fully inplemented
                 'swap': True,
                 'future': False,
                 'option': False,
                 'addMargin': True,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
-                'CORS': None,
                 'createOrder': True,
                 'createReduceOnlyOrder': True,
                 'fetchAccounts': True,
@@ -44,13 +45,14 @@ class ascendex(Exchange):
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
-                'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
-                'fetchFundingRates': True,
                 'fetchFundingRateHistory': False,
+                'fetchFundingRates': True,
+                'fetchIndexOHLCV': False,
+                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': True,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchOHLCV': True,
@@ -90,7 +92,7 @@ class ascendex(Exchange):
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/112027508-47984600-8b48-11eb-9e17-d26459cc36c6.jpg',
                 'api': 'https://ascendex.com',
-                'test': 'https://bitmax-test.io',
+                'test': 'https://api-test.ascendex-sandbox.com',
                 'www': 'https://ascendex.com',
                 'doc': [
                     'https://bitmax-exchange.github.io/bitmax-pro-api/#bitmax-pro-api-documentation',
@@ -384,7 +386,6 @@ class ascendex(Exchange):
             currency = dataById[id]
             code = self.safe_currency_code(id)
             precision = self.safe_string_2(currency, 'precisionScale', 'nativeScale')
-            minAmount = self.parse_precision(precision)
             # why would the exchange API have different names for the same field
             fee = self.safe_number_2(currency, 'withdrawFee', 'withdrawalFee')
             status = self.safe_string_2(currency, 'status', 'statusCode')
@@ -404,7 +405,7 @@ class ascendex(Exchange):
                 'precision': int(precision),
                 'limits': {
                     'amount': {
-                        'min': self.parse_number(minAmount),
+                        'min': self.parse_number(self.parse_precision(precision)),
                         'max': None,
                     },
                     'withdraw': {
@@ -513,18 +514,10 @@ class ascendex(Exchange):
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
             settle = self.safe_currency_code(settleId)
-            precision = {
-                'amount': self.safe_number(market, 'lotSize'),
-                'price': self.safe_number(market, 'tickSize'),
-            }
             status = self.safe_string(market, 'status')
-            active = (status == 'Normal')
             spot = settle is None
             swap = not spot
-            type = 'swap' if swap else 'spot'
-            margin = self.safe_value(market, 'marginTradable', False)
             linear = True if swap else None
-            contractSize = self.parse_number('1') if swap else None
             minQty = self.safe_number(market, 'minQty')
             maxQty = self.safe_number(market, 'maxQty')
             minPrice = self.safe_number(market, 'tickSize')
@@ -545,6 +538,7 @@ class ascendex(Exchange):
                 quote = self.safe_currency_code(quoteId)
                 symbol = base + '/' + quote + ':' + settle
             fee = self.safe_number(market, 'commissionReserveRate')
+            marginTradable = self.safe_value(market, 'marginTradable', False)
             result.append({
                 'id': id,
                 'symbol': symbol,
@@ -554,24 +548,27 @@ class ascendex(Exchange):
                 'baseId': baseId,
                 'quoteId': quoteId,
                 'settleId': settleId,
-                'type': type,
+                'type': 'swap' if swap else 'spot',
                 'spot': spot,
-                'margin': margin,
+                'margin': marginTradable if spot else None,
                 'swap': swap,
                 'future': False,
                 'option': False,
-                'active': active,
+                'active': (status == 'Normal'),
                 'contract': swap,
                 'linear': linear,
                 'inverse': not linear if swap else None,
                 'taker': fee,
                 'maker': fee,
-                'contractSize': contractSize,
+                'contractSize': self.parse_number('1') if swap else None,
                 'expiry': None,
                 'expiryDatetime': None,
                 'strike': None,
                 'optionType': None,
-                'precision': precision,
+                'precision': {
+                    'amount': self.safe_number(market, 'lotSize'),
+                    'price': self.safe_number(market, 'tickSize'),
+                },
                 'limits': {
                     'leverage': {
                         'min': None,
@@ -643,6 +640,23 @@ class ascendex(Exchange):
             result[code] = account
         return self.safe_balance(result)
 
+    def parse_swap_balance(self, response):
+        timestamp = self.milliseconds()
+        result = {
+            'info': response,
+            'timestamp': timestamp,
+            'datetime': self.iso8601(timestamp),
+        }
+        data = self.safe_value(response, 'data', {})
+        collaterals = self.safe_value(data, 'collaterals', [])
+        for i in range(0, len(collaterals)):
+            balance = collaterals[i]
+            code = self.safe_currency_code(self.safe_string(balance, 'asset'))
+            account = self.account()
+            account['total'] = self.safe_string(balance, 'balance')
+            result[code] = account
+        return self.safe_balance(result)
+
     async def fetch_balance(self, params={}):
         await self.load_markets()
         await self.load_accounts()
@@ -659,7 +673,7 @@ class ascendex(Exchange):
         method = self.get_supported_mapping(marketType, {
             'spot': defaultMethod,
             'margin': defaultMethod,
-            'swap': 'v1PrivateAccountGroupGetFuturesCollateralBalance',
+            'swap': 'v2PrivateAccountGroupGetFuturesPosition',
         })
         if accountCategory == 'cash':
             request['account-category'] = accountCategory
@@ -693,21 +707,24 @@ class ascendex(Exchange):
         #         ]
         #     }
         #
-        # futures
+        # swap
         #
         #     {
-        #         "code":0,
-        #         "data":[
-        #             {"asset":"BTC","totalBalance":"0","availableBalance":"0","maxTransferrable":"0","priceInUSDT":"9456.59"},
-        #             {"asset":"ETH","totalBalance":"0","availableBalance":"0","maxTransferrable":"0","priceInUSDT":"235.95"},
-        #             {"asset":"USDT","totalBalance":"0","availableBalance":"0","maxTransferrable":"0","priceInUSDT":"1"},
-        #             {"asset":"USDC","totalBalance":"0","availableBalance":"0","maxTransferrable":"0","priceInUSDT":"1.00035"},
-        #             {"asset":"PAX","totalBalance":"0","availableBalance":"0","maxTransferrable":"0","priceInUSDT":"1.00045"},
-        #             {"asset":"USDTR","totalBalance":"0","availableBalance":"0","maxTransferrable":"0","priceInUSDT":"1"}
-        #         ]
+        #         "code": 0,
+        #         "data": {
+        #             "accountId": "fut2ODPhGiY71Pl4vtXnOZ00ssgD7QGn",
+        #             "ac": "FUTURES",
+        #             "collaterals": [
+        #                 {"asset":"ADA","balance":"0.355803","referencePrice":"1.05095","discountFactor":"0.9"},
+        #                 {"asset":"USDT","balance":"0.000014519","referencePrice":"1","discountFactor":"1"}
+        #             ],
+        #         }j
         #     }
         #
-        return self.parse_balance(response)
+        if marketType == 'swap':
+            return self.parse_swap_balance(response)
+        else:
+            return self.parse_balance(response)
 
     async def fetch_order_book(self, symbol, limit=None, params={}):
         await self.load_markets()
@@ -935,14 +952,12 @@ class ascendex(Exchange):
         buyerIsMaker = self.safe_value(trade, 'bm', False)
         makerOrTaker = 'maker' if buyerIsMaker else 'taker'
         side = 'buy' if buyerIsMaker else 'sell'
-        symbol = None
-        if (symbol is None) and (market is not None):
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         return self.safe_trade({
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'id': None,
             'order': None,
             'type': None,
@@ -2143,8 +2158,11 @@ class ascendex(Exchange):
         return await self.v2PrivateAccountGroupPostFuturesLeverage(self.extend(request, params))
 
     async def set_margin_mode(self, marginType, symbol=None, params={}):
+        marginType = marginType.lower()
+        if marginType == 'cross':
+            marginType = 'crossed'
         if marginType != 'isolated' and marginType != 'crossed':
-            raise BadRequest(self.id + ' setMarginMode() marginType argument should be isolated or crossed')
+            raise BadRequest(self.id + ' setMarginMode() marginType argument should be isolated or cross')
         await self.load_markets()
         await self.load_accounts()
         market = self.market(symbol)
@@ -2158,6 +2176,70 @@ class ascendex(Exchange):
         if market['type'] != 'future':
             raise BadSymbol(self.id + ' setMarginMode() supports futures contracts only')
         return await self.v2PrivateAccountGroupPostFuturesMarginType(self.extend(request, params))
+
+    async def fetch_leverage_tiers(self, symbol=None, params={}):
+        await self.load_markets()
+        tiers = {}
+        symbolDefined = (symbol is not None)
+        if symbolDefined:
+            market = self.market(symbol)
+            if not market['contract']:
+                raise BadRequest(self.id + ' fetchLeverageTiers() supports contract markets only')
+        response = await self.v2PublicGetFuturesContract(params)
+        #
+        #     {
+        #         "code":0,
+        #         "data":[
+        #             {
+        #                 "symbol":"BTC-PERP",
+        #                 "status":"Normal",
+        #                 "displayName":"BTCUSDT",
+        #                 "settlementAsset":"USDT",
+        #                 "underlying":"BTC/USDT",
+        #                 "tradingStartTime":1579701600000,
+        #                 "priceFilter":{"minPrice":"1","maxPrice":"1000000","tickSize":"1"},
+        #                 "lotSizeFilter":{"minQty":"0.0001","maxQty":"1000000000","lotSize":"0.0001"},
+        #                 "commissionType":"Quote",
+        #                 "commissionReserveRate":"0.001",
+        #                 "marketOrderPriceMarkup":"0.03",
+        #                 "marginRequirements":[
+        #                     {"positionNotionalLowerBound":"0","positionNotionalUpperBound":"50000","initialMarginRate":"0.01","maintenanceMarginRate":"0.006"},
+        #                     {"positionNotionalLowerBound":"50000","positionNotionalUpperBound":"200000","initialMarginRate":"0.02","maintenanceMarginRate":"0.012"},
+        #                     {"positionNotionalLowerBound":"200000","positionNotionalUpperBound":"2000000","initialMarginRate":"0.04","maintenanceMarginRate":"0.024"},
+        #                     {"positionNotionalLowerBound":"2000000","positionNotionalUpperBound":"20000000","initialMarginRate":"0.1","maintenanceMarginRate":"0.06"},
+        #                     {"positionNotionalLowerBound":"20000000","positionNotionalUpperBound":"40000000","initialMarginRate":"0.2","maintenanceMarginRate":"0.12"},
+        #                     {"positionNotionalLowerBound":"40000000","positionNotionalUpperBound":"1000000000","initialMarginRate":"0.333333","maintenanceMarginRate":"0.2"}
+        #                 ]
+        #             }
+        #         ]
+        #     }
+        #
+        data = self.safe_value(response, 'data')
+        for i in range(0, len(data)):
+            item = data[i]
+            marginRequirements = self.safe_value(item, 'marginRequirements')
+            id = self.safe_string(item, 'symbol')
+            market = self.market(id)
+            brackets = []
+            for j in range(0, len(marginRequirements)):
+                bracket = marginRequirements[j]
+                initialMarginRate = self.safe_string(bracket, 'initialMarginRate')
+                brackets.append({
+                    'tier': self.sum(j, 1),
+                    'notionalCurrency': market['quote'],
+                    'notionalFloor': self.safe_number(bracket, 'positionNotionalLowerBound'),
+                    'notionalCap': self.safe_number(bracket, 'positionNotionalUpperBound'),
+                    'maintenanceMarginRate': self.safe_number(bracket, 'maintenanceMarginRate'),
+                    'maxLeverage': self.parse_number(Precise.string_div('1', initialMarginRate)),
+                    'info': bracket,
+                })
+            tiers[market['symbol']] = brackets
+        if symbolDefined:
+            result = {}
+            result[symbol] = self.safe_value(tiers, symbol)
+            return result
+        else:
+            return tiers
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
         version = api[0]

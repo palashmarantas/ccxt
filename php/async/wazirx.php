@@ -20,17 +20,15 @@ class wazirx extends Exchange {
             'version' => 'v2',
             'rateLimit' => 100,
             'has' => array(
+                'CORS' => false,
                 'spot' => true,
-                'margin' => null, // exists but currently unimplemented
+                'margin' => null, // has but unimplemented
                 'swap' => false,
                 'future' => false,
                 'option' => false,
-                'addMargin' => false,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
-                'CORS' => false,
                 'createOrder' => true,
-                'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBidsAsks' => false,
                 'fetchClosedOrders' => false,
@@ -44,8 +42,6 @@ class wazirx extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
-                'fetchLeverage' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => false,
@@ -54,9 +50,6 @@ class wazirx extends Exchange {
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
                 'fetchOrders' => true,
-                'fetchPosition' => false,
-                'fetchPositions' => false,
-                'fetchPositionsRisk' => false,
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchStatus' => true,
                 'fetchTicker' => true,
@@ -68,9 +61,6 @@ class wazirx extends Exchange {
                 'fetchTransactions' => false,
                 'fetchTransfers' => false,
                 'fetchWithdrawals' => false,
-                'reduceMargin' => false,
-                'setLeverage' => false,
-                'setPositionMode' => false,
                 'transfer' => false,
                 'withdraw' => false,
             ),
@@ -80,6 +70,7 @@ class wazirx extends Exchange {
                 'www' => 'https://wazirx.com',
                 'doc' => 'https://docs.wazirx.com/#public-rest-api-for-wazirx',
                 'fees' => 'https://wazirx.com/fees',
+                'referral' => 'https://wazirx.com/invite/k7rrnks5',
             ),
             'api' => array(
                 'public' => array(
@@ -102,6 +93,7 @@ class wazirx extends Exchange {
                         'historicalTrades' => 1,
                         'openOrders' => 1,
                         'order' => 1,
+                        'myTrades' => 1,
                     ),
                     'post' => array(
                         'order' => 1,
@@ -210,16 +202,16 @@ class wazirx extends Exchange {
                 'contract' => false,
                 'linear' => null,
                 'inverse' => null,
-                'maker' => $this->parse_number($makerString),
                 'taker' => $this->parse_number($takerString),
+                'maker' => $this->parse_number($makerString),
                 'contractSize' => null,
                 'expiry' => null,
                 'expiryDatetime' => null,
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($entry, 'quoteAssetPrecision'),
                     'amount' => $this->safe_integer($entry, 'baseAssetPrecision'),
+                    'price' => $this->safe_integer($entry, 'quoteAssetPrecision'),
                 ),
                 'limits' => array(
                     'leverage' => array(
@@ -363,12 +355,9 @@ class wazirx extends Exchange {
         //     }
         //
         $id = $this->safe_string($trade, 'id');
-        $timestamp = $this->parse8601($this->safe_string($trade, 'time'));
+        $timestamp = $this->safe_integer($trade, 'time');
         $datetime = $this->iso8601($timestamp);
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         $isBuyerMaker = $this->safe_value($trade, 'isBuyerMaker');
         $side = $isBuyerMaker ? 'sell' : 'buy';
         $price = $this->safe_number($trade, 'price');
@@ -379,7 +368,7 @@ class wazirx extends Exchange {
             'id' => $id,
             'timestamp' => $timestamp,
             'datetime' => $datetime,
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'order' => $id,
             'type' => null,
             'side' => $side,
@@ -388,7 +377,7 @@ class wazirx extends Exchange {
             'amount' => $amount,
             'cost' => $cost,
             'fee' => null,
-        ));
+        ), $market);
     }
 
     public function fetch_status($params = array ()) {
@@ -610,7 +599,8 @@ class wazirx extends Exchange {
     }
 
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
-        if (!($type === 'limit') || ($type === 'stop_limit')) {
+        $type = strtolower($type);
+        if (($type !== 'limit') && ($type !== 'stop_limit')) {
             throw new ExchangeError($this->id . ' createOrder() supports limit and stop_limit orders only');
         }
         if ($price === null) {

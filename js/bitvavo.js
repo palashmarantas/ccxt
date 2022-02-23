@@ -19,29 +19,56 @@ module.exports = class bitvavo extends Exchange {
             'certified': true,
             'pro': true,
             'has': {
+                'CORS': undefined,
+                'spot': true,
+                'margin': false,
+                'swap': false,
+                'future': false,
+                'option': false,
+                'addMargin': false,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
-                'CORS': undefined,
                 'createOrder': true,
+                'createReduceOnlyOrder': false,
                 'editOrder': true,
                 'fetchBalance': true,
+                'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
+                'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchCurrencies': true,
                 'fetchDepositAddress': true,
                 'fetchDeposits': true,
+                'fetchFundingHistory': false,
+                'fetchFundingRate': false,
+                'fetchFundingRateHistory': false,
+                'fetchFundingRates': false,
+                'fetchIndexOHLCV': false,
+                'fetchIsolatedPositions': false,
+                'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
+                'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
                 'fetchOHLCV': true,
                 'fetchOpenOrders': true,
                 'fetchOrder': true,
                 'fetchOrderBook': true,
                 'fetchOrders': true,
+                'fetchPosition': false,
+                'fetchPositions': false,
+                'fetchPositionsRisk': false,
+                'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
                 'fetchWithdrawals': true,
-                'privateAPI': true,
-                'publicAPI': true,
+                'reduceMargin': false,
+                'setLeverage': false,
+                'setMarginMode': false,
+                'setPositionMode': false,
                 'withdraw': true,
             },
             'timeframes': {
@@ -303,18 +330,18 @@ module.exports = class bitvavo extends Exchange {
                 'swap': false,
                 'future': false,
                 'option': false,
+                'active': (status === 'trading'),
                 'contract': false,
                 'linear': undefined,
                 'inverse': undefined,
                 'contractSize': undefined,
-                'active': (status === 'trading'),
                 'expiry': undefined,
                 'expiryDatetime': undefined,
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (market, 'pricePrecision'),
                     'amount': amountPrecision,
+                    'price': this.safeInteger (market, 'pricePrecision'),
                 },
                 'limits': {
                     'leverage': {
@@ -607,7 +634,7 @@ module.exports = class bitvavo extends Exchange {
         const timestamp = this.safeInteger (trade, 'timestamp');
         const side = this.safeString (trade, 'side');
         const id = this.safeString2 (trade, 'id', 'fillId');
-        const marketId = this.safeInteger (trade, 'market');
+        const marketId = this.safeString (trade, 'market');
         const symbol = this.safeSymbol (marketId, market, '-');
         const taker = this.safeValue (trade, 'taker');
         let takerOrMaker = undefined;
@@ -1319,7 +1346,7 @@ module.exports = class bitvavo extends Exchange {
         //         }
         //     ]
         //
-        return this.parseTransactions (response, currency, since, limit);
+        return this.parseTransactions (response, currency, since, limit, { 'type': 'withdrawal' });
     }
 
     async fetchDeposits (code = undefined, since = undefined, limit = undefined, params = {}) {
@@ -1354,7 +1381,7 @@ module.exports = class bitvavo extends Exchange {
         //         }
         //     ]
         //
-        return this.parseTransactions (response, currency, since, limit);
+        return this.parseTransactions (response, currency, since, limit, { 'type': 'deposit' });
     }
 
     parseTransactionStatus (status) {
@@ -1423,10 +1450,10 @@ module.exports = class bitvavo extends Exchange {
             };
         }
         let type = undefined;
-        if ('success' in transaction) {
+        if (('success' in transaction) || ('address' in transaction)) {
             type = 'withdrawal';
         } else {
-            type = (status === undefined) ? 'deposit' : 'withdrawal';
+            type = 'deposit';
         }
         const tag = this.safeString (transaction, 'paymentId');
         return {

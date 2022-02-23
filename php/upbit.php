@@ -22,18 +22,16 @@ class upbit extends Exchange {
             'pro' => true,
             // new metainfo interface
             'has' => array(
+                'CORS' => true,
                 'spot' => true,
                 'margin' => null,
                 'swap' => false,
                 'future' => false,
                 'option' => false,
-                'addMargin' => false,
                 'cancelOrder' => true,
-                'CORS' => true,
                 'createDepositAddress' => true,
                 'createMarketOrder' => true,
                 'createOrder' => true,
-                'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchCanceledOrders' => true,
                 'fetchClosedOrders' => true,
@@ -42,6 +40,7 @@ class upbit extends Exchange {
                 'fetchDeposits' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
+                'fetchFundingRateHistories' => false,
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
@@ -54,17 +53,12 @@ class upbit extends Exchange {
                 'fetchOrderBook' => true,
                 'fetchOrderBooks' => true,
                 'fetchOrders' => null,
-                'fetchPosition' => false,
-                'fetchPositions' => false,
-                'fetchPositionsRisk' => false,
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
                 'fetchTransactions' => null,
                 'fetchWithdrawals' => true,
-                'reduceMargin' => false,
-                'setPositionMode' => false,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -337,7 +331,6 @@ class upbit extends Exchange {
         $askFee = $this->safe_number($response, 'ask_fee');
         $fee = max ($bidFee, $askFee);
         return array(
-            'info' => $response,
             'id' => $marketId,
             'symbol' => $base . '/' . $quote,
             'base' => $base,
@@ -364,8 +357,8 @@ class upbit extends Exchange {
             'strike' => null,
             'optionType' => null,
             'precision' => array(
-                'price' => 8,
-                'amount' => 8,
+                'amount' => intval('8'),
+                'price' => intval('8'),
             ),
             'limits' => array(
                 'leverage' => array(
@@ -384,6 +377,7 @@ class upbit extends Exchange {
                     'min' => $this->safe_number($bid, 'min_total'),
                     'max' => $this->safe_number($marketInfo, 'max_total'),
                 ),
+                'info' => $response,
             ),
         );
     }
@@ -391,22 +385,14 @@ class upbit extends Exchange {
     public function fetch_markets($params = array ()) {
         $response = $this->publicGetMarketAll ($params);
         //
-        //     array( array(       $market => "KRW-BTC",
-        //          korean_name => "비트코인",
-        //         english_name => "Bitcoin"  ),
-        //       array(       $market => "KRW-DASH",
-        //          korean_name => "대시",
-        //         english_name => "Dash"      ),
-        //       array(       $market => "KRW-ETH",
-        //          korean_name => "이더리움",
-        //         english_name => "Ethereum" ),
-        //       array(       $market => "BTC-ETH",
-        //          korean_name => "이더리움",
-        //         english_name => "Ethereum" ),
-        //       ...,
-        //       {       $market => "BTC-BSV",
-        //          korean_name => "비트코인에스브이",
-        //         english_name => "Bitcoin SV" } )
+        //    array(
+        //        array(
+        //            $market => "KRW-BTC",
+        //            korean_name => "비트코인",
+        //            english_name => "Bitcoin"
+        //        ),
+        //        ...,
+        //    )
         //
         $result = array();
         for ($i = 0; $i < count($response); $i++) {
@@ -733,43 +719,26 @@ class upbit extends Exchange {
         } else if ($askOrBid === 'bid') {
             $side = 'buy';
         }
-        $cost = $this->safe_number($trade, 'funds');
-        $priceString = $this->safe_string_2($trade, 'trade_price', 'price');
-        $amountString = $this->safe_string_2($trade, 'trade_volume', 'volume');
-        $price = $this->parse_number($priceString);
-        $amount = $this->parse_number($amountString);
-        if ($cost === null) {
-            $cost = $this->parse_number(Precise::string_mul($priceString, $amountString));
-        }
+        $cost = $this->safe_string($trade, 'funds');
+        $price = $this->safe_string_2($trade, 'trade_price', 'price');
+        $amount = $this->safe_string_2($trade, 'trade_volume', 'volume');
         $marketId = $this->safe_string_2($trade, 'market', 'code');
-        $market = $this->safe_market($marketId, $market);
+        $market = $this->safe_market($marketId, $market, '-');
         $fee = null;
-        $feeCurrency = null;
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-            $feeCurrency = $market['quote'];
-        } else {
-            list($baseId, $quoteId) = explode('-', $marketId);
-            $base = $this->safe_currency_code($baseId);
-            $quote = $this->safe_currency_code($quoteId);
-            $symbol = $base . '/' . $quote;
-            $feeCurrency = $quote;
-        }
         $feeCost = $this->safe_string($trade, $askOrBid . '_fee');
         if ($feeCost !== null) {
             $fee = array(
-                'currency' => $feeCurrency,
+                'currency' => $market['quote'],
                 'cost' => $feeCost,
             );
         }
-        return array(
+        return $this->safe_trade(array(
             'id' => $id,
             'info' => $trade,
             'order' => $orderId,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'type' => null,
             'side' => $side,
             'takerOrMaker' => null,
@@ -777,7 +746,7 @@ class upbit extends Exchange {
             'amount' => $amount,
             'cost' => $cost,
             'fee' => $fee,
-        );
+        ), $market);
     }
 
     public function fetch_trades($symbol, $since = null, $limit = null, $params = array ()) {

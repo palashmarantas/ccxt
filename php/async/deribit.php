@@ -24,19 +24,29 @@ class deribit extends Exchange {
             // 5 requests per second for matching-engine endpoints, cost = (1000ms / rateLimit) / 5 = 4
             'rateLimit' => 50,
             'has' => array(
-                'fetchPosition' => true,
+                'CORS' => true,
+                'spot' => false,
+                'margin' => false,
+                'swap' => null,
+                'future' => null,
+                'option' => null,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
-                'CORS' => true,
                 'createDepositAddress' => true,
                 'createOrder' => true,
                 'editOrder' => true,
                 'fetchBalance' => true,
+                'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
+                'fetchBorrowRateHistory' => false,
+                'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
                 'fetchClosedOrders' => true,
                 'fetchDepositAddress' => true,
                 'fetchDeposits' => true,
                 'fetchHistoricalVolatility' => true,
                 'fetchIndexOHLCV' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
@@ -46,6 +56,7 @@ class deribit extends Exchange {
                 'fetchOrderBook' => true,
                 'fetchOrders' => null,
                 'fetchOrderTrades' => true,
+                'fetchPosition' => true,
                 'fetchPositions' => true,
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchStatus' => true,
@@ -488,7 +499,8 @@ class deribit extends Exchange {
                         $type = 'option';
                         $strike = $this->safe_number($market, 'strike');
                         $optionType = $this->safe_string($market, 'option_type');
-                        $symbol = $symbol . ':' . $this->number_to_string($strike) . ':' . $optionType;
+                        $letter = ($optionType === 'call') ? 'C' : 'P';
+                        $symbol = $symbol . ':' . $this->number_to_string($strike) . ':' . $letter;
                     } else {
                         $type = 'future';
                     }
@@ -510,13 +522,13 @@ class deribit extends Exchange {
                     'swap' => $swap,
                     'future' => $future,
                     'option' => $option,
+                    'active' => $this->safe_value($market, 'is_active'),
                     'contract' => true,
                     'linear' => false,
                     'inverse' => true,
                     'taker' => $this->safe_number($market, 'taker_commission'),
                     'maker' => $this->safe_number($market, 'maker_commission'),
                     'contractSize' => $this->safe_number($market, 'contract_size'),
-                    'active' => $this->safe_value($market, 'is_active'),
                     'expiry' => $expiry,
                     'expiryDatetime' => $this->iso8601($expiry),
                     'strike' => $strike,

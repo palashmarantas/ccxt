@@ -36,7 +36,7 @@ use Elliptic\EdDSA;
 use BN\BN;
 use Exception;
 
-$version = '1.70.50';
+$version = '1.73.96';
 
 // rounding mode
 const TRUNCATE = 0;
@@ -55,7 +55,7 @@ const PAD_WITH_ZERO = 1;
 
 class Exchange {
 
-    const VERSION = '1.70.50';
+    const VERSION = '1.73.96';
 
     private static $base58_alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     private static $base58_encoder = null;
@@ -143,7 +143,6 @@ class Exchange {
         'kucoinfutures',
         'kuna',
         'latoken',
-        'latoken1',
         'lbank',
         'liquid',
         'luno',
@@ -155,8 +154,8 @@ class Exchange {
         'oceanex',
         'okcoin',
         'okex',
-        'okex3',
         'okex5',
+        'okx',
         'paymium',
         'phemex',
         'poloniex',
@@ -173,6 +172,7 @@ class Exchange {
         'wavesexchange',
         'wazirx',
         'whitebit',
+        'woo',
         'xena',
         'yobit',
         'zaif',
@@ -1180,14 +1180,16 @@ class Exchange {
         $this->has = array(
             'publicAPI' => true,
             'privateAPI' => true,
+            'CORS' => null,
+            'spot' => null,
             'margin' => null,
             'swap' => null,
             'future' => null,
+            'option' => null,
             'addMargin' => null,
             'cancelAllOrders' => null,
             'cancelOrder' => true,
             'cancelOrders' => null,
-            'CORS' => null,
             'createDepositAddress' => null,
             'createLimitOrder' => true,
             'createMarketOrder' => true,
@@ -1220,6 +1222,7 @@ class Exchange {
             'fetchL2OrderBook' => true,
             'fetchLedger' => null,
             'fetchLedgerEntry' => null,
+            'fetchLeverageTiers' => null,
             'fetchMarkets' => true,
             'fetchMarkOHLCV' => null,
             'fetchMyTrades' => null,
@@ -1765,9 +1768,10 @@ class Exchange {
             throw new ExchangeNotAvailable(implode(' ', array($url, $method, $curl_errno, $curl_error)));
         }
 
-        $this->handle_errors($http_status_code, $http_status_text, $url, $method, $response_headers, $result ? $result : null, $json_response, $headers, $body);
-        $this->handle_http_status_code($http_status_code, $http_status_text, $url, $method, $result);
-
+        $skip_further_error_handling = $this->handle_errors($http_status_code, $http_status_text, $url, $method, $response_headers, $result ? $result : null, $json_response, $headers, $body);
+        if (!$skip_further_error_handling) {
+            $this->handle_http_status_code($http_status_code, $http_status_text, $url, $method, $result);
+        }
         // check if $curl_errno is not zero
         if ($curl_errno) {
             throw new NetworkError($this->id . ' unknown error: ' . strval($curl_errno) . ' ' . $curl_error);
@@ -1791,8 +1795,36 @@ class Exchange {
         $values = is_array($markets) ? array_values($markets) : array();
         for ($i = 0; $i < count($values); $i++) {
             $values[$i] = array_replace_recursive(
+                array(
+                    'id' => null,
+                    'symbol' => null,
+                    'base' => null,
+                    'quote' => null,
+                    'baseId' => null,
+                    'quoteId' => null,
+                    'active' => null,
+                    'type' => null,
+                    'linear' => null,
+                    'inverse' => null,
+                    'spot' => false,
+                    'swap' => false,
+                    'future' => false,
+                    'option' => false,
+                    'margin' => false,
+                    'contract' => false,
+                    'contractSize' => null,
+                    'expiry' => null,
+                    'expiryDatetime' => null,
+                    'optionType' => null,
+                    'strike' => null,
+                    'settle' => null,
+                    'settleId' => null,
+                    'precision' => $this->precision,
+                    'limits' => $this->limits,
+                    'info' => null,
+
+                ),
                 $this->fees['trading'],
-                array('precision' => $this->precision, 'limits' => $this->limits),
                 $values[$i]
             );
         }

@@ -38,12 +38,14 @@ class bybit(Exchange):
             'rateLimit': 100,
             'hostname': 'bybit.com',  # bybit.com, bytick.com
             'has': {
+                'CORS': True,
+                'spot': True,
                 'margin': False,
                 'swap': True,
                 'future': True,
+                'option': None,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
-                'CORS': True,
                 'createOrder': True,
                 'editOrder': True,
                 'fetchBalance': True,
@@ -588,9 +590,11 @@ class bybit(Exchange):
                     '30068': ExchangeError,  # exit value must be positive
                     '30074': InvalidOrder,  # can't create the stop order, because you expect the order will be triggered when the LastPrice(or IndexPrice、 MarkPrice, determined by trigger_by) is raising to stop_px, but the LastPrice(or IndexPrice、 MarkPrice) is already equal to or greater than stop_px, please adjust base_price or stop_px
                     '30075': InvalidOrder,  # can't create the stop order, because you expect the order will be triggered when the LastPrice(or IndexPrice、 MarkPrice, determined by trigger_by) is falling to stop_px, but the LastPrice(or IndexPrice、 MarkPrice) is already equal to or less than stop_px, please adjust base_price or stop_px
+                    '30078': ExchangeError,  # {"ret_code":30078,"ret_msg":"","ext_code":"","ext_info":"","result":null,"time_now":"1644853040.916000","rate_limit_status":73,"rate_limit_reset_ms":1644853040912,"rate_limit":75}
                     # '30084': BadRequest,  # Isolated not modified, see handleErrors below
                     '33004': AuthenticationError,  # apikey already expired
                     '34026': ExchangeError,  # the limit is no change
+                    '130021': InsufficientFunds,  # {"ret_code":130021,"ret_msg":"orderfix price failed for CannotAffordOrderCost.","ext_code":"","ext_info":"","result":null,"time_now":"1644588250.204878","rate_limit_status":98,"rate_limit_reset_ms":1644588250200,"rate_limit":100}
                 },
                 'broad': {
                     'unknown orderInfo': OrderNotFound,  # {"ret_code":-1,"ret_msg":"unknown orderInfo","ext_code":"","ext_info":"","result":null,"time_now":"1584030414.005545","rate_limit_status":99,"rate_limit_reset_ms":1584030414003,"rate_limit":100}
@@ -865,10 +869,12 @@ class bybit(Exchange):
         for i in range(0, len(markets)):
             market = markets[i]
             id = self.safe_string_2(market, 'name', 'symbol')
-            baseId = self.safe_string(market, 'base_currency')
-            quoteId = self.safe_string(market, 'quote_currency')
+            baseId = self.safe_string_2(market, 'base_currency', 'baseCoin')
+            quoteId = self.safe_string_2(market, 'quote_currency', 'quoteCoin')
+            settleId = self.safe_string(market, 'settleCoin')
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
+            settle = self.safe_currency_code(settleId)
             linear = (quote in linearQuoteCurrencies)
             inverse = not linear
             symbol = base + '/' + quote
@@ -892,23 +898,35 @@ class bybit(Exchange):
             swap = (type == 'swap')
             future = (type == 'future')
             option = (type == 'option')
+            contract = swap or future or option
             result.append({
                 'id': id,
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'settle': settle,
+                'baseId': baseId,
+                'quoteId': quoteId,
+                'settleId': settleId,
                 'active': active,
                 'precision': precision,
                 'taker': self.safe_number(market, 'taker_fee'),
                 'maker': self.safe_number(market, 'maker_fee'),
                 'type': type,
                 'spot': spot,
+                'margin': None,  # todo
+                'contract': contract,
+                'contractSize': None,  # todo
                 'swap': swap,
                 'future': future,
-                'futures': future,  # * Deprecated, use future
+                'futures': future,  # Deprecated, use future
                 'option': option,
                 'linear': linear,
                 'inverse': inverse,
+                'expiry': None,  # todo
+                'expiryDatetime': None,  # todo
+                'optionType': None,
+                'strike': None,
                 'limits': {
                     'amount': {
                         'min': self.safe_number(lotSizeFilter, 'min_trading_qty'),
@@ -1218,26 +1236,28 @@ class bybit(Exchange):
         method = 'publicLinearGetFundingPrevFundingRate' if market['linear'] else 'v2PublicGetFundingPrevFundingRate'
         response = await getattr(self, method)(self.extend(request, params))
         #
-        # {
-        #     "ret_code": 0,
-        #     "ret_msg": "ok",
-        #     "ext_code": "",
-        #     "result": {
-        #         "symbol": "BTCUSD",
-        #         "funding_rate": "0.00010000",
-        #         "funding_rate_timestamp": 1577433600
-        #     },
-        #     "ext_info": null,
-        #     "time_now": "1577445586.446797",
-        #     "rate_limit_status": 119,
-        #     "rate_limit_reset_ms": 1577445586454,
-        #     "rate_limit": 120
-        # }
+        #    {
+        #        "ret_code": 0,
+        #        "ret_msg": "ok",
+        #        "ext_code": "",
+        #        "result": {
+        #            "symbol": "BTCUSD",
+        #            "funding_rate": "0.00010000",
+        #            "funding_rate_timestamp": 1577433600  # v2PublicGetFundingPrevFundingRate
+        #  #         "funding_rate_timestamp": "2022-02-05T08:00:00.000Z"  # publicLinearGetFundingPrevFundingRate
+        #        },
+        #        "ext_info": null,
+        #        "time_now": "1577445586.446797",
+        #        "rate_limit_status": 119,
+        #        "rate_limit_reset_ms": 1577445586454,
+        #        "rate_limit": 120,
+        #    }
         #
         result = self.safe_value(response, 'result')
         fundingRate = self.safe_number(result, 'funding_rate')
-        fundingTime = self.safe_integer(result, 'funding_rate_timestamp') * 1000
-        nextFundingTime = self.sum(fundingTime, 8 * 3600000)
+        fundingTimestamp = self.safe_timestamp(result, 'funding_rate_timestamp')
+        if fundingTimestamp is None:
+            fundingTimestamp = self.parse8601(self.safe_string(result, 'funding_rate_timestamp'))
         currentTime = self.milliseconds()
         return {
             'info': result,
@@ -1249,11 +1269,11 @@ class bybit(Exchange):
             'timestamp': currentTime,
             'datetime': self.iso8601(currentTime),
             'fundingRate': fundingRate,
-            'fundingTimestamp': fundingTime,
-            'fundingDatetime': self.iso8601(fundingTime),
+            'fundingTimestamp': fundingTimestamp,
+            'fundingDatetime': self.iso8601(fundingTimestamp),
             'nextFundingRate': None,
-            'nextFundingTimestamp': nextFundingTime,
-            'nextFundingDatetime': self.iso8601(nextFundingTime),
+            'nextFundingTimestamp': None,
+            'nextFundingDatetime': None,
             'previousFundingRate': None,
             'previousFundingTimestamp': None,
             'previousFundingDatetime': None,
@@ -1629,7 +1649,9 @@ class bybit(Exchange):
         timestamp = self.parse8601(self.safe_string(order, 'created_at'))
         id = self.safe_string_2(order, 'order_id', 'stop_order_id')
         type = self.safe_string_lower(order, 'order_type')
-        price = self.safe_string(order, 'price')
+        price = None
+        if type != 'market':
+            price = self.safe_string(order, 'price')
         average = self.safe_string(order, 'average_price')
         amount = self.safe_string(order, 'qty')
         cost = self.safe_string(order, 'cum_exec_value')
@@ -1637,17 +1659,16 @@ class bybit(Exchange):
         remaining = self.safe_string(order, 'leaves_qty')
         marketTypes = self.safe_value(self.options, 'marketTypes', {})
         marketType = self.safe_string(marketTypes, symbol)
-        if market is not None:
-            if marketType == 'linear':
-                feeCurrency = market['quote']
-            else:
-                feeCurrency = market['base']
+        if marketType == 'linear':
+            feeCurrency = market['quote']
+        else:
+            feeCurrency = market['base']
         lastTradeTimestamp = self.safe_timestamp(order, 'last_exec_time')
         if lastTradeTimestamp == 0:
             lastTradeTimestamp = None
         status = self.parse_order_status(self.safe_string_2(order, 'order_status', 'stop_order_status'))
         side = self.safe_string_lower(order, 'side')
-        feeCostString = Precise.string_abs(self.safe_string(order, 'cum_exec_fee'))
+        feeCostString = self.safe_string(order, 'cum_exec_fee')
         fee = None
         if feeCostString is not None:
             fee = {
@@ -2742,8 +2763,10 @@ class bybit(Exchange):
         if leverage is None:
             raise ArgumentsRequired(self.id + '.setMarginMode requires a leverage parameter')
         marginType = marginType.upper()
-        if (marginType != 'ISOLATED') and (marginType != 'CROSSED'):
-            raise BadRequest(self.id + ' marginType must be either isolated or crossed')
+        if marginType == 'CROSSED':  # * Deprecated, use 'CROSS' instead
+            marginType = 'CROSS'
+        if (marginType != 'ISOLATED') and (marginType != 'CROSS'):
+            raise BadRequest(self.id + ' marginType must be either isolated or cross')
         await self.load_markets()
         market = self.market(symbol)
         method = None

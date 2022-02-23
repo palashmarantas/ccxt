@@ -19,21 +19,47 @@ class bithumb extends Exchange {
             'countries' => array( 'KR' ), // South Korea
             'rateLimit' => 500,
             'has' => array(
-                'cancelOrder' => true,
                 'CORS' => true,
+                'spot' => true,
+                'margin' => false,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
+                'addMargin' => false,
+                'cancelOrder' => true,
                 'createMarketOrder' => true,
                 'createOrder' => true,
+                'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
+                'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
+                'fetchBorrowRateHistory' => false,
+                'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
+                'fetchFundingHistory' => false,
+                'fetchFundingRate' => false,
+                'fetchFundingRateHistory' => false,
+                'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
+                'fetchIsolatedPositions' => false,
+                'fetchLeverage' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchOHLCV' => true,
                 'fetchOpenOrders' => true,
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
+                'fetchPosition' => false,
+                'fetchPositions' => false,
+                'fetchPositionsRisk' => false,
+                'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
+                'reduceMargin' => false,
+                'setLeverage' => false,
+                'setMarginMode' => false,
+                'setPositionMode' => false,
                 'withdraw' => true,
             ),
             'hostname' => 'bithumb.com',
@@ -151,6 +177,7 @@ class bithumb extends Exchange {
         $quotes = is_array($quoteCurrencies) ? array_keys($quoteCurrencies) : array();
         for ($i = 0; $i < count($quotes); $i++) {
             $quote = $quotes[$i];
+            $quoteId = $quote;
             $extension = $this->safe_value($quoteCurrencies, $quote, array());
             $method = 'publicGetTickerALL' . $quote;
             $response = $this->$method ($params);
@@ -163,7 +190,6 @@ class bithumb extends Exchange {
                 }
                 $market = $data[$currencyId];
                 $base = $this->safe_currency_code($currencyId);
-                $symbol = $currencyId . '/' . $quote;
                 $active = true;
                 if (gettype($market) === 'array' && count(array_filter(array_keys($market), 'is_string')) == 0) {
                     $numElements = is_array($market) ? count($market) : 0;
@@ -173,18 +199,37 @@ class bithumb extends Exchange {
                 }
                 $entry = $this->deep_extend(array(
                     'id' => $currencyId,
-                    'symbol' => $symbol,
+                    'symbol' => $base . '/' . $quote,
                     'base' => $base,
                     'quote' => $quote,
-                    'info' => $market,
+                    'settle' => null,
+                    'baseId' => $currencyId,
+                    'quoteId' => $quoteId,
+                    'settleId' => null,
                     'type' => 'spot',
                     'spot' => true,
+                    'margin' => false,
+                    'swap' => false,
+                    'future' => false,
+                    'option' => false,
                     'active' => $active,
+                    'contract' => false,
+                    'linear' => null,
+                    'inverse' => null,
+                    'contractSize' => null,
+                    'expiry' => null,
+                    'expiryDateTime' => null,
+                    'strike' => null,
+                    'optionType' => null,
                     'precision' => array(
-                        'amount' => 4,
-                        'price' => 4,
+                        'amount' => intval('4'),
+                        'price' => intval('4'),
                     ),
                     'limits' => array(
+                        'leverage' => array(
+                            'min' => null,
+                            'max' => null,
+                        ),
                         'amount' => array(
                             'min' => null,
                             'max' => null,
@@ -195,8 +240,7 @@ class bithumb extends Exchange {
                         ),
                         'cost' => array(), // set via options
                     ),
-                    'baseId' => null,
-                    'quoteId' => null,
+                    'info' => $market,
                 ), $extension);
                 $result[] = $entry;
             }
@@ -494,10 +538,7 @@ class bithumb extends Exchange {
         $side = $this->safe_string($trade, 'type');
         $side = ($side === 'ask') ? 'sell' : 'buy';
         $id = $this->safe_string($trade, 'cont_no');
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string_2($trade, 'units_traded', 'units');
         $costString = $this->safe_string($trade, 'total');
@@ -516,7 +557,7 @@ class bithumb extends Exchange {
             'info' => $trade,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'order' => null,
             'type' => $type,
             'side' => $side,
@@ -727,7 +768,8 @@ class bithumb extends Exchange {
         if (($base !== null) && ($quote !== null)) {
             $symbol = $base . '/' . $quote;
         }
-        if (($symbol === null) && ($market !== null)) {
+        if ($symbol === null) {
+            $market = $this->safe_market(null, $market);
             $symbol = $market['symbol'];
         }
         $id = $this->safe_string($order, 'order_id');

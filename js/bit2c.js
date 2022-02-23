@@ -15,15 +15,44 @@ module.exports = class bit2c extends Exchange {
             'countries': [ 'IL' ], // Israel
             'rateLimit': 3000,
             'has': {
-                'cancelOrder': true,
                 'CORS': undefined,
+                'spot': true,
+                'margin': false,
+                'swap': false,
+                'future': false,
+                'option': false,
+                'addMargin': false,
+                'cancelOrder': true,
                 'createOrder': true,
+                'createReduceOnlyOrder': false,
                 'fetchBalance': true,
+                'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
+                'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
+                'fetchFundingHistory': false,
+                'fetchFundingRate': false,
+                'fetchFundingRateHistory': false,
+                'fetchFundingRates': false,
+                'fetchIndexOHLCV': false,
+                'fetchIsolatedPositions': false,
+                'fetchLeverage': false,
+                'fetchLeverageTiers': false,
+                'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
                 'fetchOpenOrders': true,
                 'fetchOrderBook': true,
+                'fetchPosition': false,
+                'fetchPositions': false,
+                'fetchPositionsRisk': false,
+                'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTrades': true,
+                'reduceMargin': false,
+                'setLeverage': false,
+                'setMarginMode': false,
+                'setPositionMode': false,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27766119-3593220e-5ece-11e7-8b3a-5a041f6bcc3f.jpg',
@@ -288,10 +317,7 @@ module.exports = class bit2c extends Exchange {
         const timestamp = this.safeInteger (order, 'created');
         const price = this.safeString (order, 'price');
         const amount = this.safeString (order, 'amount');
-        let symbol = undefined;
-        if (market !== undefined) {
-            symbol = market['symbol'];
-        }
+        market = this.safeMarket (undefined, market);
         let side = this.safeValue (order, 'type');
         if (side === 0) {
             side = 'buy';
@@ -307,7 +333,7 @@ module.exports = class bit2c extends Exchange {
             'datetime': this.iso8601 (timestamp),
             'lastTradeTimestamp': undefined,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': undefined,
             'timeInForce': undefined,
             'postOnly': undefined,
@@ -396,16 +422,13 @@ module.exports = class bit2c extends Exchange {
                 }
             }
         }
-        let symbol = undefined;
-        if (market !== undefined) {
-            symbol = market['symbol'];
-        }
+        market = this.safeMarket (undefined, market);
         return this.safeTrade ({
             'info': trade,
             'id': id,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': orderId,
             'type': undefined,
             'side': side,

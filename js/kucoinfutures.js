@@ -22,19 +22,22 @@ module.exports = class kucoinfutures extends kucoin {
             'comment': 'Platform 2.0',
             'quoteJsonNumbers': false,
             'has': {
+                'CORS': undefined,
                 'spot': false,
                 'margin': false,
                 'swap': true,
                 'future': true,
                 'option': false,
+                'addMargin': true,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
-                'CORS': undefined,
                 'createDepositAddress': true,
                 'createOrder': true,
                 'fetchAccounts': true,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': true,
@@ -48,6 +51,7 @@ module.exports = class kucoinfutures extends kucoin {
                 'fetchIndexOHLCV': false,
                 'fetchL3OrderBook': true,
                 'fetchLedger': true,
+                'fetchLeverageTiers': true,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -66,7 +70,6 @@ module.exports = class kucoinfutures extends kucoin {
                 'setMarginMode': false,
                 'transfer': true,
                 'withdraw': undefined,
-                'addMargin': true,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/147508995-9e35030a-d046-43a1-a006-6fabd981b554.jpg',
@@ -99,6 +102,7 @@ module.exports = class kucoinfutures extends kucoin {
                     'get': {
                         'contracts/active': 1,
                         'contracts/{symbol}': 1,
+                        'contracts/risk-limit/{symbol}': 1,
                         'ticker': 1,
                         'level2/snapshot': 1.33,
                         'level2/depth{limit}': 1,
@@ -282,6 +286,10 @@ module.exports = class kucoinfutures extends kucoin {
                     'ERC20': 'eth',
                     'TRC20': 'trx',
                 },
+                // 'code': 'BTC',
+                // 'fetchBalance': {
+                //    'code': 'BTC',
+                // },
             },
         });
     }
@@ -412,38 +420,40 @@ module.exports = class kucoinfutures extends kucoin {
             const quoteMinSize = this.safeNumber (market, 'quoteMinSize');
             const inverse = this.safeValue (market, 'isInverse');
             const status = this.safeString (market, 'status');
-            const active = status === 'Open';
+            const multiplier = this.safeString (market, 'multiplier');
             result.push ({
                 'id': id,
                 'symbol': symbol,
-                'baseId': baseId,
-                'quoteId': quoteId,
-                'settleId': settleId,
                 'base': base,
                 'quote': quote,
                 'settle': settle,
+                'baseId': baseId,
+                'quoteId': quoteId,
+                'settleId': settleId,
                 'type': type,
                 'spot': false,
                 'margin': false,
                 'swap': swap,
                 'future': future,
                 'option': false,
-                'active': active,
+                'active': (status === 'Open'),
                 'contract': true,
                 'linear': !inverse,
                 'inverse': inverse,
                 'taker': this.safeNumber (market, 'takerFeeRate'),
                 'maker': this.safeNumber (market, 'makerFeeRate'),
-                'contractSize': this.parseNumber (Precise.stringAbs (this.safeString (market, 'multiplier'))),
+                'contractSize': this.parseNumber (Precise.stringAbs (multiplier)),
                 'expiry': expiry,
                 'expiryDatetime': this.iso8601 (expiry),
+                'strike': undefined,
+                'optionType': undefined,
                 'precision': {
                     'amount': this.safeNumber (market, 'lotSize'),
                     'price': this.safeNumber (market, 'tickSize'),
                 },
                 'limits': {
                     'leverage': {
-                        'min': undefined,
+                        'min': this.parseNumber ('1'),
                         'max': this.safeNumber (market, 'maxLeverage'),
                     },
                     'amount': {
@@ -1137,10 +1147,11 @@ module.exports = class kucoinfutures extends kucoin {
         const cost = Precise.stringDiv (rawCost, leverage);
         let average = undefined;
         if (Precise.stringGt (filled, '0')) {
+            const contractSize = this.safeString (market, 'contractSize');
             if (market['linear']) {
-                average = Precise.stringDiv (rawCost, Precise.stringMul (market['contractSize'], filled));
+                average = Precise.stringDiv (rawCost, Precise.stringMul (contractSize, filled));
             } else {
-                average = Precise.stringDiv (Precise.stringMul (market['contractSize'], filled), rawCost);
+                average = Precise.stringDiv (Precise.stringMul (contractSize, filled), rawCost);
             }
         }
         // precision reported by their api is 8 d.p.
@@ -1243,10 +1254,19 @@ module.exports = class kucoinfutures extends kucoin {
     async fetchBalance (params = {}) {
         await this.loadMarkets ();
         // only fetches one balance at a time
-        // by default it will only fetch the BTC balance of the futures account
-        // you can send 'currency' in params to fetch other currencies
-        // fetchBalance ({ 'type': 'future', 'currency': 'USDT' })
-        const response = await this.futuresPrivateGetAccountOverview (params);
+        const request = {};
+        const coin = this.safeString (params, 'coin');
+        let defaultCode = this.safeString (this.options, 'code');
+        const fetchBalanceOptions = this.safeValue (this.options, 'fetchBalance', {});
+        defaultCode = this.safeString (fetchBalanceOptions, 'code', defaultCode);
+        const code = this.safeString (params, 'code', defaultCode);
+        if (coin !== undefined) {
+            request['currency'] = coin;
+        } else if (code !== undefined) {
+            const currency = this.currency (code);
+            request['currency'] = currency['id'];
+        }
+        const response = await this.futuresPrivateGetAccountOverview (this.extend (request, params));
         //
         //     {
         //         code: '200000',
@@ -1425,8 +1445,32 @@ module.exports = class kucoinfutures extends kucoin {
         //         "createdAt":1547026472000
         //     }
         //
+        // fetchMyTrades (private) v1
+        //
+        //      {
+        //          "symbol":"DOGEUSDTM",
+        //          "tradeId":"620ec41a96bab27b5f4ced56",
+        //          "orderId":"620ec41a0d1d8a0001560bd0",
+        //          "side":"sell",
+        //          "liquidity":"taker",
+        //          "forceTaker":true,
+        //          "price":"0.13969",
+        //          "size":1,
+        //          "value":"13.969",
+        //          "feeRate":"0.0006",
+        //          "fixFee":"0",
+        //          "feeCurrency":"USDT",
+        //          "stop":"",
+        //          "tradeTime":1645134874858018058,
+        //          "fee":"0.0083814",
+        //          "settleCurrency":"USDT",
+        //          "orderType":"market",
+        //          "tradeType":"trade",
+        //          "createdAt":1645134874858
+        //      }
+        //
         const marketId = this.safeString (trade, 'symbol');
-        const symbol = this.safeSymbol (marketId, market, '-');
+        market = this.safeMarket (marketId, market, '-');
         const id = this.safeString2 (trade, 'tradeId', 'id');
         const orderId = this.safeString (trade, 'orderId');
         const takerOrMaker = this.safeString (trade, 'liquidity');
@@ -1442,53 +1486,46 @@ module.exports = class kucoinfutures extends kucoin {
         }
         const priceString = this.safeString2 (trade, 'price', 'dealPrice');
         const amountString = this.safeString2 (trade, 'size', 'amount');
-        const price = this.parseNumber (priceString);
-        const amount = this.parseNumber (amountString);
         const side = this.safeString (trade, 'side');
         let fee = undefined;
-        const feeCost = this.safeNumber (trade, 'fee');
-        if (feeCost !== undefined) {
+        const feeCostString = this.safeString (trade, 'fee');
+        if (feeCostString !== undefined) {
             const feeCurrencyId = this.safeString (trade, 'feeCurrency');
             let feeCurrency = this.safeCurrencyCode (feeCurrencyId);
             if (feeCurrency === undefined) {
-                if (market !== undefined) {
-                    feeCurrency = (side === 'sell') ? market['quote'] : market['base'];
-                }
+                feeCurrency = (side === 'sell') ? market['quote'] : market['base'];
             }
             fee = {
-                'cost': feeCost,
+                'cost': feeCostString,
                 'currency': feeCurrency,
-                'rate': this.safeNumber (trade, 'feeRate'),
+                'rate': this.safeString (trade, 'feeRate'),
             };
         }
         let type = this.safeString2 (trade, 'type', 'orderType');
         if (type === 'match') {
             type = undefined;
         }
-        let cost = this.safeNumber2 (trade, 'funds', 'dealValue');
-        if (cost === undefined) {
-            market = this.market (symbol);
+        let costString = this.safeString2 (trade, 'funds', 'value');
+        if (costString === undefined) {
             const contractSize = this.safeString (market, 'contractSize');
             const contractCost = Precise.stringMul (priceString, amountString);
-            if (contractSize && contractCost) {
-                cost = this.parseNumber (Precise.stringMul (contractCost, contractSize));
-            }
+            costString = Precise.stringMul (contractCost, contractSize);
         }
-        return {
+        return this.safeTrade ({
             'info': trade,
             'id': id,
             'order': orderId,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
             'takerOrMaker': takerOrMaker,
             'side': side,
-            'price': price,
-            'amount': amount,
-            'cost': cost,
+            'price': priceString,
+            'amount': amountString,
+            'cost': costString,
             'fee': fee,
-        };
+        }, market);
     }
 
     async fetchDeposits (code = undefined, since = undefined, limit = undefined, params = {}) {
@@ -1589,5 +1626,57 @@ module.exports = class kucoinfutures extends kucoin {
 
     async fetchLedger (code = undefined, since = undefined, limit = undefined, params = {}) {
         throw new BadRequest (this.id + ' has no method fetchLedger');
+    }
+
+    async fetchLeverageTiers (symbol = undefined, params = {}) {
+        await this.loadMarkets ();
+        if (symbol === undefined) {
+            throw new ArgumentsRequired (this.id + ' fetchLeverageTiers() requires a symbol argument');
+        }
+        const market = this.market (symbol);
+        if (!market['contract']) {
+            throw new BadRequest (this.id + ' fetchLeverageTiers() supports contract markets only');
+        }
+        const request = {
+            'symbol': market['id'],
+        };
+        const response = await this.futuresPublicGetContractsRiskLimitSymbol (this.extend (request, params));
+        //
+        //    {
+        //        "code": "200000",
+        //        "data": [
+        //            {
+        //                "symbol": "ETHUSDTM",
+        //                "level": 1,
+        //                "maxRiskLimit": 300000,
+        //                "minRiskLimit": 0,
+        //                "maxLeverage": 100,
+        //                "initialMargin": 0.0100000000,
+        //                "maintainMargin": 0.0050000000
+        //            },
+        //            ...
+        //        ]
+        //    }
+        //
+        const data = this.safeValue (response, 'data');
+        const tiers = {};
+        for (let i = 0; i < data.length; i++) {
+            const tier = data[i];
+            const symbol = this.safeSymbol (this.safeString (tier, 'symbol'));
+            if (!(symbol in tiers)) {
+                tiers[symbol] = [];
+            }
+            const market = this.market (symbol);
+            tiers[symbol].push ({
+                'tier': this.safeNumber (tier, 'level'),
+                'notionalCurrency': market['base'],
+                'notionalFloor': this.safeNumber (tier, 'minRiskLimit'),
+                'notionalCap': this.safeNumber (tier, 'maxRiskLimit'),
+                'maintenanceMarginRate': this.safeNumber (tier, 'maintainMargin'),
+                'maxLeverage': this.safeNumber (tier, 'maxLeverage'),
+                'info': tier,
+            });
+        }
+        return tiers;
     }
 };

@@ -18,6 +18,7 @@ module.exports = class wavesexchange extends Exchange {
             'certified': true,
             'pro': false,
             'has': {
+                'CORS': undefined,
                 'spot': true,
                 'margin': false,
                 'swap': false,
@@ -25,11 +26,12 @@ module.exports = class wavesexchange extends Exchange {
                 'option': false,
                 'addMargin': false,
                 'cancelOrder': true,
-                'createMarketOrder': undefined,
+                'createMarketOrder': true,
                 'createOrder': true,
                 'createReduceOnlyOrder': false,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
@@ -42,6 +44,7 @@ module.exports = class wavesexchange extends Exchange {
                 'fetchIndexOHLCV': false,
                 'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -81,7 +84,7 @@ module.exports = class wavesexchange extends Exchange {
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/84547058-5fb27d80-ad0b-11ea-8711-78ac8b3c7f31.jpg',
                 'test': {
-                    'matcher': 'http://matcher-testnet.waves.exchange',
+                    'matcher': 'https://matcher-testnet.waves.exchange',
                     'node': 'https://nodes-testnet.wavesnodes.com',
                     'public': 'https://api-testnet.wavesplatform.com/v0',
                     'private': 'https://api-testnet.waves.exchange/v1',
@@ -89,7 +92,7 @@ module.exports = class wavesexchange extends Exchange {
                     'market': 'https://testnet.waves.exchange/api/v1/forward/marketdata/api/v1',
                 },
                 'api': {
-                    'matcher': 'http://matcher.waves.exchange',
+                    'matcher': 'https://matcher.waves.exchange',
                     'node': 'https://nodes.waves.exchange',
                     'public': 'https://api.wavesplatform.com/v0',
                     'private': 'https://api.waves.exchange/v1',
@@ -128,6 +131,7 @@ module.exports = class wavesexchange extends Exchange {
                         'matcher/orderbook/market',
                         'matcher/orderbook/cancel',
                         'matcher/orderbook/{baseId}/{quoteId}/cancel',
+                        'matcher/orderbook/{amountAsset}/{priceAsset}/calculateFee',
                         'matcher/debug/saveSnapshots',
                         'matcher/orders/{address}/cancel',
                         'matcher/orders/cancel/{orderId}',
@@ -280,9 +284,13 @@ module.exports = class wavesexchange extends Exchange {
                     ],
                 },
             },
+            'currencies': {
+                'WX': { 'id': 'EMAMLxDnv3xiz8RXg8Btj33jcEw3wLczL3JKYYmuubpc', 'numericId': undefined, 'code': 'WX', 'precision': 8 },
+            },
             'options': {
                 'allowedCandles': 1440,
                 'accessToken': undefined,
+                'createMarketBuyOrderRequiresPrice': true,
                 'matcherPublicKey': undefined,
                 'quotes': undefined,
                 'createOrderDefaultExpiry': 2419200000, // 60 * 60 * 24 * 28 * 1000
@@ -336,6 +344,56 @@ module.exports = class wavesexchange extends Exchange {
     setSandboxMode (enabled) {
         this.options['messagePrefix'] = enabled ? 'T' : 'W';
         return super.setSandboxMode (enabled);
+    }
+
+    async getFeesForAsset (symbol, side, amount, price, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        amount = this.amountToPrecision (symbol, amount);
+        price = this.priceToPrecision (symbol, price);
+        const request = this.extend ({
+            'amountAsset': market['baseId'],
+            'priceAsset': market['quoteId'],
+            'orderType': side,
+            'amount': amount,
+            'price': price,
+        }, params);
+        return await this.matcherPostMatcherOrderbookAmountAssetPriceAssetCalculateFee (request);
+    }
+
+    async calculateFee (symbol, type, side, amount, price, takerOrMaker = 'taker', params = {}) {
+        const response = await this.getFeesForAsset (symbol, side, amount, price);
+        // {
+        //     "base":{
+        //        "feeAssetId":"WAVES",
+        //        "matcherFee":"1000000"
+        //     },
+        //     "discount":{
+        //        "feeAssetId":"EMAMLxDnv3xiz8RXg8Btj33jcEw3wLczL3JKYYmuubpc",
+        //        "matcherFee":"4077612"
+        //     }
+        //  }
+        const isDiscountFee = this.safeValue (params, 'isDiscountFee', false);
+        let mode = undefined;
+        if (isDiscountFee) {
+            mode = this.safeValue (response, 'discount');
+        } else {
+            mode = this.safeValue (response, 'base');
+        }
+        const matcherFee = this.safeString (mode, 'matcherFee');
+        const feeAssetId = this.safeString (mode, 'feeAssetId');
+        const feeAsset = this.safeCurrencyCode (feeAssetId);
+        const adjustedMatcherFee = this.currencyFromPrecision (feeAsset, matcherFee);
+        const amountAsString = this.numberToString (amount);
+        const priceAsString = this.numberToString (price);
+        const feeCost = this.feeToPrecision (symbol, this.parseNumber (adjustedMatcherFee));
+        const feeRate = Precise.stringDiv (adjustedMatcherFee, Precise.stringMul (amountAsString, priceAsString));
+        return {
+            'type': takerOrMaker,
+            'currency': feeAsset,
+            'rate': this.parseNumber (feeRate),
+            'cost': this.parseNumber (feeCost),
+        };
     }
 
     async getQuotes () {
@@ -595,7 +653,8 @@ module.exports = class wavesexchange extends Exchange {
         } else if (api === 'matcher') {
             if (method === 'POST') {
                 headers = {
-                    'content-type': 'application/json',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
                 };
                 body = this.json (query);
             } else {
@@ -762,15 +821,21 @@ module.exports = class wavesexchange extends Exchange {
             'quoteId': market['quoteId'],
             'interval': this.timeframes[timeframe],
         };
-        if (since !== undefined) {
-            request['timeStart'] = since.toString ();
-        } else {
-            const allowedCandles = this.safeInteger (this.options, 'allowedCandles', 1440);
-            const timeframeUnix = this.parseTimeframe (timeframe) * 1000;
-            const currentTime = Math.floor (this.milliseconds () / timeframeUnix) * timeframeUnix;
-            const delta = (allowedCandles - 1) * timeframeUnix;
+        const allowedCandles = this.safeInteger (this.options, 'allowedCandles', 1440);
+        if (limit === undefined) {
+            limit = allowedCandles;
+        }
+        limit = Math.min (allowedCandles, limit);
+        const duration = this.parseTimeframe (timeframe) * 1000;
+        if (since === undefined) {
+            const currentTime = parseInt (this.milliseconds () / duration) * duration;
+            const delta = (limit - 1) * duration;
             const timeStart = currentTime - delta;
             request['timeStart'] = timeStart.toString ();
+        } else {
+            request['timeStart'] = since.toString ();
+            const timeEnd = this.sum (since, duration * limit);
+            request['timeEnd'] = timeEnd.toString ();
         }
         const response = await this.publicGetCandlesBaseIdQuoteId (this.extend (request, params));
         //
@@ -1049,6 +1114,23 @@ module.exports = class wavesexchange extends Exchange {
         return this.fromPrecision (price, scale);
     }
 
+    safeGetDynamic (settings) {
+        const orderFee = this.safeValue (settings, 'orderFee');
+        if ('dynamic' in orderFee) {
+            return this.safeValue (orderFee, 'dynamic');
+        } else {
+            return this.safeValue (orderFee['composite']['default'], 'dynamic');
+        }
+    }
+
+    safeGetRates (dynamic) {
+        const rates = this.safeValue (dynamic, 'rates');
+        if (rates === undefined) {
+            return { 'WAVES': 1 };
+        }
+        return rates;
+    }
+
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         this.checkRequiredDependencies ();
         this.checkRequiredKeys ();
@@ -1057,106 +1139,74 @@ module.exports = class wavesexchange extends Exchange {
         const matcherPublicKey = await this.getMatcherPublicKey ();
         const amountAsset = this.getAssetId (market['baseId']);
         const priceAsset = this.getAssetId (market['quoteId']);
-        amount = this.amountToPrecision (symbol, amount);
-        price = this.priceToPrecision (symbol, price);
+        const isMarketOrder = (type === 'market');
+        if ((isMarketOrder) && (price === undefined)) {
+            throw new InvalidOrder (this.id + ' createOrder() requires a price argument for ' + type + ' orders to determine the max price for buy and the min price for sell');
+        }
         const orderType = (side === 'buy') ? 0 : 1;
         const timestamp = this.milliseconds ();
         const defaultExpiryDelta = this.safeInteger (this.options, 'createOrderDefaultExpiry', 2419200000);
         const expiration = this.sum (timestamp, defaultExpiryDelta);
-        const settings = await this.matcherGetMatcherSettings ();
+        const matcherFees = await this.getFeesForAsset (symbol, side, amount, price);
         // {
-        //   "orderVersions": [
-        //     1,
-        //     2,
-        //     3
-        //   ],
-        //   "success": true,
-        //   "matcherPublicKey": "9cpfKN9suPNvfeUNphzxXMjcnn974eme8ZhWUjaktzU5",
-        //   "orderFee": {
-        //     "dynamic": {
-        //       "baseFee": 300000,
-        //       "rates": {
-        //         "34N9YcEETLWn93qYQ64EsP1x89tSruJU44RrEMSXXEPJ": 1.0257813,
-        //         "62LyMjcr2DtiyF5yVXFhoQ2q414VPPJXjsNYp72SuDCH": 0.01268146,
-        //         "HZk1mbfuJpmxU1Fs4AX5MWLVYtctsNcg6e2C6VKqK8zk": 0.05232404,
-        //         "8LQW8f7P5d5PZM7GtZEBgaqRPGSzS3DfPuiXrURJ4AJS": 0.00023985,
-        //         "4LHHvYGNKJUg5hj65aGD5vgScvCBmLpdRFtjokvCjSL8": 19.5967716,
-        //         "474jTeYx2r2Va35794tCScAXWJG9hU2HcgxzMowaZUnu": 0.00937073,
-        //         "DG2xFkPdDwKUoBkzGAhQtLpSGzfXLiCYPEzeKH2Ad24p": 2.19825,
-        //         "B3uGHFRpSUuGEDWjqB9LWWxafQj8VTvpMucEyoxzws5H": 0.03180264,
-        //         "zMFqXuoyrn5w17PFurTqxB7GsS71fp9dfk6XFwxbPCy": 0.00996631,
-        //         "5WvPKSJXzVE2orvbkJ8wsQmmQKqTv9sGBPksV4adViw3": 0.03254476,
-        //         "WAVES": 1,
-        //         "BrjUWjndUanm5VsJkbUip8VRYy6LWJePtxya3FNv4TQa": 0.03703704
-        //       }
+        //     "base":{
+        //        "feeAssetId":"WAVES", // varies depending on the trading pair
+        //        "matcherFee":"1000000"
+        //     },
+        //     "discount":{
+        //        "feeAssetId":"EMAMLxDnv3xiz8RXg8Btj33jcEw3wLczL3JKYYmuubpc",
+        //        "matcherFee":"4077612"
         //     }
-        //   },
-        //   "networkByte": 87,
-        //   "matcherVersion": "2.1.4.8",
-        //   "status": "SimpleResponse",
-        //   "priceAssets": [
-        //     "Ft8X1v1LTa1ABafufpaCWyVj8KkaxUWE6xBhW6sNFJck",
-        //     "DG2xFkPdDwKUoBkzGAhQtLpSGzfXLiCYPEzeKH2Ad24p",
-        //     "34N9YcEETLWn93qYQ64EsP1x89tSruJU44RrEMSXXEPJ",
-        //     "Gtb1WRznfchDnTh37ezoDTJ4wcoKaRsKqKjJjy7nm2zU",
-        //     "2mX5DzVKWrAJw8iwdJnV2qtoeVG9h5nTDpTqC1wb1WEN",
-        //     "8LQW8f7P5d5PZM7GtZEBgaqRPGSzS3DfPuiXrURJ4AJS",
-        //     "WAVES",
-        //     "474jTeYx2r2Va35794tCScAXWJG9hU2HcgxzMowaZUnu",
-        //     "zMFqXuoyrn5w17PFurTqxB7GsS71fp9dfk6XFwxbPCy",
-        //     "62LyMjcr2DtiyF5yVXFhoQ2q414VPPJXjsNYp72SuDCH",
-        //     "HZk1mbfuJpmxU1Fs4AX5MWLVYtctsNcg6e2C6VKqK8zk",
-        //     "B3uGHFRpSUuGEDWjqB9LWWxafQj8VTvpMucEyoxzws5H",
-        //     "5WvPKSJXzVE2orvbkJ8wsQmmQKqTv9sGBPksV4adViw3",
-        //     "BrjUWjndUanm5VsJkbUip8VRYy6LWJePtxya3FNv4TQa",
-        //     "4LHHvYGNKJUg5hj65aGD5vgScvCBmLpdRFtjokvCjSL8"
-        //   ]
-        // }
-        const orderFee = this.safeValue (settings, 'orderFee');
-        const dynamic = this.safeValue (orderFee, 'dynamic');
-        const baseMatcherFee = this.safeString (dynamic, 'baseFee');
-        const wavesMatcherFee = this.currencyFromPrecision ('WAVES', baseMatcherFee);
-        const rates = this.safeValue (dynamic, 'rates');
-        // choose sponsored assets from the list of priceAssets above
-        const priceAssets = Object.keys (rates);
+        //  }
+        const base = this.safeValue (matcherFees, 'base');
+        const baseFeeAssetId = this.safeString (base, 'feeAssetId');
+        const baseFeeAsset = this.safeCurrencyCode (baseFeeAssetId);
+        const baseMatcherFee = this.safeString (base, 'matcherFee');
+        const discount = this.safeValue (matcherFees, 'discount');
+        const discountFeeAssetId = this.safeString (discount, 'feeAssetId');
+        const discountFeeAsset = this.safeCurrencyCode (discountFeeAssetId);
+        const discountMatcherFee = this.safeString (discount, 'matcherFee');
         let matcherFeeAssetId = undefined;
         let matcherFee = undefined;
-        if ('feeAssetId' in params) {
-            matcherFeeAssetId = params['feeAssetId'];
-        } else if ('feeAssetId' in this.options) {
-            matcherFeeAssetId = this.options['feeAssetId'];
-        } else {
-            const balances = await this.fetchBalance ();
-            const floatWavesMatcherFee = parseFloat (wavesMatcherFee);
-            if (balances['WAVES']['free'] > floatWavesMatcherFee) {
-                matcherFeeAssetId = 'WAVES';
-                matcherFee = baseMatcherFee;
+        // check first if user supplied asset fee is valid
+        if (('feeAsset' in params) || ('feeAsset' in this.options)) {
+            const feeAsset = this.safeString (params, 'feeAsset', this.safeString (this.options, 'feeAsset'));
+            const feeCurrency = this.currency (feeAsset);
+            matcherFeeAssetId = this.safeString (feeCurrency, 'id');
+        }
+        const balances = await this.fetchBalance ();
+        if (matcherFeeAssetId !== undefined) {
+            if (baseFeeAssetId !== matcherFeeAssetId && discountFeeAssetId !== matcherFeeAssetId) {
+                throw new InvalidOrder (this.id + ' asset fee must be ' + baseFeeAsset + ' or ' + discountFeeAsset);
+            }
+            const matcherFeeAsset = this.safeCurrencyCode (matcherFeeAssetId);
+            const rawMatcherFee = (matcherFeeAssetId === baseFeeAssetId) ? baseMatcherFee : discountMatcherFee;
+            const floatMatcherFee = parseFloat (this.currencyFromPrecision (matcherFeeAsset, rawMatcherFee));
+            if ((matcherFeeAsset in balances) && (balances[matcherFeeAsset]['free'] >= floatMatcherFee)) {
+                matcherFee = parseInt (rawMatcherFee);
             } else {
-                for (let i = 0; i < priceAssets.length; i++) {
-                    const assetId = priceAssets[i];
-                    const code = this.safeCurrencyCode (assetId);
-                    const balance = this.safeString (this.safeValue (balances, code, {}), 'free');
-                    const assetFee = Precise.stringMul (rates[assetId], wavesMatcherFee);
-                    if ((balance !== undefined) && Precise.stringGt (balance, assetFee)) {
-                        matcherFeeAssetId = assetId;
-                        break;
-                    }
+                throw new InsufficientFunds (this.id + ' not enough funds of the selected asset fee');
+            }
+        }
+        if (matcherFeeAssetId === undefined) {
+            // try to the pay the fee using the base first then discount asset
+            const floatBaseMatcherFee = parseFloat (this.currencyFromPrecision (baseFeeAsset, baseMatcherFee));
+            if ((baseFeeAsset in balances) && (balances[baseFeeAsset]['free'] >= floatBaseMatcherFee)) {
+                matcherFeeAssetId = baseFeeAssetId;
+                matcherFee = parseInt (baseMatcherFee);
+            } else {
+                const floatDiscountMatcherFee = parseFloat (this.currencyFromPrecision (discountFeeAsset, discountMatcherFee));
+                if ((discountFeeAsset in balances) && (balances[discountFeeAsset]['free'] >= floatDiscountMatcherFee)) {
+                    matcherFeeAssetId = discountFeeAssetId;
+                    matcherFee = parseInt (discountMatcherFee);
                 }
             }
         }
         if (matcherFeeAssetId === undefined) {
-            throw InsufficientFunds (this.id + ' not enough funds to cover the fee, specify feeAssetId in params or options, or buy some WAVES');
+            throw new InsufficientFunds (this.id + ' not enough funds on none of the eligible asset fees');
         }
-        if (matcherFee === undefined) {
-            const wavesPrecision = this.safeInteger (this.options, 'wavesPrecision', 8);
-            const rate = this.safeString (rates, matcherFeeAssetId);
-            const code = this.safeCurrencyCode (matcherFeeAssetId);
-            const currency = this.currency (code);
-            const newPrecison = wavesPrecision - currency['precision'];
-            matcherFee = this.fromPrecision (Precise.stringMul (rate, baseMatcherFee), newPrecison);
-            // ceil the fee
-            matcherFee = Precise.stringDiv (Precise.stringAdd (matcherFee, '1'), '1', 0);
-        }
+        amount = this.amountToPrecision (symbol, amount);
+        price = this.priceToPrecision (symbol, price);
         const byteArray = [
             this.numberToBE (3, 1),
             this.base58ToBinary (this.apiKey),
@@ -1193,7 +1243,15 @@ module.exports = class wavesexchange extends Exchange {
         if (matcherFeeAssetId !== 'WAVES') {
             body['matcherFeeAssetId'] = matcherFeeAssetId;
         }
-        const response = await this.matcherPostMatcherOrderbook (body);
+        if (isMarketOrder) {
+            const response = await this.matcherPostMatcherOrderbookMarket (body);
+            const value = this.safeValue (response, 'message');
+            return this.parseOrder (value, market);
+        } else {
+            const response = await this.matcherPostMatcherOrderbook (body);
+            const value = this.safeValue (response, 'message');
+            return this.parseOrder (value, market);
+        }
         // { success: true,
         //   message:
         //    { version: 3,
@@ -1215,8 +1273,6 @@ module.exports = class wavesexchange extends Exchange {
         //      proofs:
         //       [ '2EG8zgE6Ze1X5EYA8DbfFiPXAtC7NniYBAMFbJUbzwVbHmmCKHornQfS5F32NwkHF4623KWq1U6K126h4TTqyVq' ] },
         //   status: 'OrderAccepted' }
-        const value = this.safeValue (response, 'message');
-        return this.parseOrder (value, market);
     }
 
     async cancelOrder (id, symbol = undefined, params = {}) {

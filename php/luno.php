@@ -19,23 +19,51 @@ class luno extends Exchange {
             'rateLimit' => 1000,
             'version' => '1',
             'has' => array(
-                'cancelOrder' => true,
                 'CORS' => null,
+                'spot' => true,
+                'margin' => false,
+                'swap' => false,
+                'future' => false,
+                'option' => false,
+                'addMargin' => false,
+                'cancelOrder' => true,
                 'createOrder' => true,
+                'createReduceOnlyOrder' => false,
                 'fetchAccounts' => true,
                 'fetchBalance' => true,
+                'fetchBorrowRate' => false,
+                'fetchBorrowRateHistory' => false,
+                'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
                 'fetchClosedOrders' => true,
+                'fetchFundingHistory' => false,
+                'fetchFundingRate' => false,
+                'fetchFundingRateHistory' => false,
+                'fetchFundingRates' => false,
+                'fetchIndexOHLCV' => false,
+                'fetchIsolatedPositions' => false,
                 'fetchLedger' => true,
+                'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
+                'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
                 'fetchOpenOrders' => true,
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
                 'fetchOrders' => true,
+                'fetchPosition' => false,
+                'fetchPositions' => false,
+                'fetchPositionsRisk' => false,
+                'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
                 'fetchTradingFees' => true,
+                'reduceMargin' => false,
+                'setLeverage' => false,
+                'setMarginMode' => false,
+                'setPositionMode' => false,
             ),
             'urls' => array(
                 'referral' => 'https://www.luno.com/invite/44893A',
@@ -108,6 +136,14 @@ class luno extends Exchange {
                     ),
                 ),
             ),
+            'fees' => array(
+                'trading' => array(
+                    'tierBased' => true, // based on volume from your primary currency (not the same for everyone)
+                    'percentage' => true,
+                    'taker' => $this->parse_number('0.001'),
+                    'maker' => $this->parse_number('0'),
+                ),
+            ),
         ));
     }
 
@@ -141,39 +177,40 @@ class luno extends Exchange {
             $quoteId = $this->safe_string($market, 'counter_currency');
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $symbol = $base . '/' . $quote;
             $status = $this->safe_string($market, 'trading_status');
-            $active = ($status === 'ACTIVE');
-            $precision = array(
-                'amount' => $this->safe_integer($market, 'volume_scale'),
-                'price' => $this->safe_integer($market, 'price_scale'),
-            );
             $result[] = array(
                 'id' => $id,
-                'symbol' => $symbol,
+                'symbol' => $base . '/' . $quote,
                 'base' => $base,
                 'quote' => $quote,
+                'settle' => null,
                 'baseId' => $baseId,
                 'quoteId' => $quoteId,
+                'settleId' => null,
                 'type' => 'spot',
                 'spot' => true,
                 'margin' => false,
-                'future' => false,
                 'swap' => false,
+                'future' => false,
                 'option' => false,
-                'optionType' => null,
-                'strike' => null,
+                'active' => ($status === 'ACTIVE'),
+                'contract' => false,
                 'linear' => null,
                 'inverse' => null,
-                'contract' => false,
                 'contractSize' => null,
-                'settle' => null,
-                'settleId' => null,
                 'expiry' => null,
                 'expiryDatetime' => null,
-                'active' => $active,
-                'precision' => $precision,
+                'strike' => null,
+                'optionType' => null,
+                'precision' => array(
+                    'amount' => $this->safe_integer($market, 'volume_scale'),
+                    'price' => $this->safe_integer($market, 'price_scale'),
+                ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
                     'amount' => array(
                         'min' => $this->safe_number($market, 'min_volume'),
                         'max' => $this->safe_number($market, 'max_volume'),
@@ -310,24 +347,24 @@ class luno extends Exchange {
             $side = 'buy';
         }
         $marketId = $this->safe_string($order, 'pair');
-        $symbol = $this->safe_symbol($marketId, $market);
+        $market = $this->safe_market($marketId, $market);
         $price = $this->safe_string($order, 'limit_price');
         $amount = $this->safe_string($order, 'limit_volume');
         $quoteFee = $this->safe_number($order, 'fee_counter');
         $baseFee = $this->safe_number($order, 'fee_base');
         $filled = $this->safe_string($order, 'base');
         $cost = $this->safe_string($order, 'counter');
-        $fee = array( 'currency' => null );
-        if ($quoteFee) {
-            $fee['cost'] = $quoteFee;
-            if ($market !== null) {
-                $fee['currency'] = $market['quote'];
-            }
-        } else {
-            $fee['cost'] = $baseFee;
-            if ($market !== null) {
-                $fee['currency'] = $market['base'];
-            }
+        $fee = null;
+        if ($quoteFee !== null) {
+            $fee = array(
+                'cost' => $quoteFee,
+                'currency' => $market['quote'],
+            );
+        } else if ($baseFee !== null) {
+            $fee = array(
+                'cost' => $baseFee,
+                'currency' => $market['base'],
+            );
         }
         $id = $this->safe_string($order, 'order_id');
         return $this->safe_order(array(
@@ -337,7 +374,7 @@ class luno extends Exchange {
             'timestamp' => $timestamp,
             'lastTradeTimestamp' => null,
             'status' => $status,
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'type' => null,
             'timeInForce' => null,
             'postOnly' => null,

@@ -18,6 +18,7 @@ from ccxt.base.errors import PermissionDenied
 from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import BadRequest
 from ccxt.base.errors import BadSymbol
+from ccxt.base.errors import BadResponse
 from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
@@ -59,6 +60,7 @@ class ftx(Exchange):
                 },
             },
             'has': {
+                'CORS': None,
                 'spot': True,
                 'margin': True,
                 'swap': True,
@@ -67,20 +69,22 @@ class ftx(Exchange):
                 'cancelAllOrders': True,
                 'cancelOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': True,
                 'editOrder': True,
                 'fetchBalance': True,
                 'fetchBorrowRate': True,
-                'fetchBorrowRateHistory': False,
+                'fetchBorrowRateHistories': True,
+                'fetchBorrowRateHistory': True,
                 'fetchBorrowRates': True,
                 'fetchClosedOrders': None,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
                 'fetchFundingFees': None,
-                'fetchFundingRate': True,
                 'fetchFundingHistory': True,
+                'fetchFundingRate': True,
                 'fetchFundingRateHistory': True,
-                'fetchFundingRates': None,
+                'fetchFundingRates': False,
                 'fetchIndexOHLCV': True,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
@@ -91,7 +95,9 @@ class ftx(Exchange):
                 'fetchOrderBook': True,
                 'fetchOrders': True,
                 'fetchOrderTrades': True,
+                'fetchPosition': False,
                 'fetchPositions': True,
+                'fetchPositionsRisk': False,
                 'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTickers': True,
@@ -99,8 +105,10 @@ class ftx(Exchange):
                 'fetchTrades': True,
                 'fetchTradingFees': True,
                 'fetchWithdrawals': True,
+                'reduceMargin': False,
                 'setLeverage': True,
                 'setMarginMode': False,  # FTX only supports cross margin
+                'setPositionMode': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -585,6 +593,8 @@ class ftx(Exchange):
             elif isFuture:
                 type = 'future'
                 expiry = self.parse8601(expiryDatetime)
+                if expiry is None:
+                    raise BadResponse(self.id + " symbol '" + id + "' is a future contract but with invalid expiry datetime: " + expiryDatetime)
                 parsedId = id.split('-')
                 length = len(parsedId)
                 if length > 2:
@@ -600,8 +610,6 @@ class ftx(Exchange):
                     base = '-'.join(parsedId)
                 symbol = base + '/' + quote + ':' + settle + '-' + self.yymmdd(expiry, '')
             # check if a market is a spot or future market
-            sizeIncrement = self.safe_number(market, 'sizeIncrement')
-            priceIncrement = self.safe_number(market, 'priceIncrement')
             result.append({
                 'id': id,
                 'symbol': symbol,
@@ -618,35 +626,34 @@ class ftx(Exchange):
                 'future': isFuture,
                 'option': option,
                 'active': self.safe_value(market, 'enabled'),
-                'derivative': contract,
                 'contract': contract,
-                'linear': True,
-                'inverse': False,
+                'linear': True if contract else None,
+                'inverse': False if contract else None,
                 'contractSize': self.parse_number('1'),
                 'expiry': expiry,
                 'expiryDatetime': self.iso8601(expiry),
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'amount': sizeIncrement,
-                    'price': priceIncrement,
+                    'amount': self.safe_number(market, 'sizeIncrement'),
+                    'price': self.safe_number(market, 'priceIncrement'),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': self.parse_number('1'),
+                        'max': self.parse_number('20'),
+                    },
                     'amount': {
-                        'min': sizeIncrement,
+                        'min': None,
                         'max': None,
                     },
                     'price': {
-                        'min': priceIncrement,
+                        'min': None,
                         'max': None,
                     },
                     'cost': {
                         'min': None,
                         'max': None,
-                    },
-                    'leverage': {
-                        'min': self.parse_number('1'),
-                        'max': self.parse_number('20'),
                     },
                 },
                 'info': market,
@@ -1331,18 +1338,13 @@ class ftx(Exchange):
             remaining = Precise.string_sub(amount, filled)
             if Precise.string_gt(remaining, '0'):
                 status = 'canceled'
-        symbol = None
         marketId = self.safe_string(order, 'market')
-        if marketId is not None:
-            if marketId in self.markets_by_id:
-                market = self.markets_by_id[marketId]
-                symbol = market['symbol']
-            else:
-                # support for delisted market ids
-                # https://github.com/ccxt/ccxt/issues/7113
-                symbol = marketId
-        if (symbol is None) and (market is not None):
-            symbol = market['symbol']
+        market = self.safe_market(marketId, market)
+        symbol = market['symbol']
+        if symbol is None:
+            # support for delisted market ids
+            # https://github.com/ccxt/ccxt/issues/7113
+            symbol = marketId
         side = self.safe_string(order, 'side')
         type = self.safe_string(order, 'type')
         average = self.safe_string(order, 'avgFillPrice')
@@ -1472,6 +1474,12 @@ class ftx(Exchange):
         #
         result = self.safe_value(response, 'result', [])
         return self.parse_order(result, market)
+
+    async def create_reduce_only_order(self, symbol, type, side, amount, price=None, params={}):
+        request = {
+            'reduceOnly': True,
+        }
+        return await self.create_order(symbol, type, side, amount, price, self.extend(request, params))
 
     async def edit_order(self, id, symbol, type, side, amount, price=None, params={}):
         await self.load_markets()
@@ -2342,3 +2350,62 @@ class ftx(Exchange):
                 'info': rate,
             }
         return rates
+
+    async def fetch_borrow_rate_histories(self, since=None, limit=None, params={}):
+        await self.load_markets()
+        request = {}
+        endTime = self.safe_number_2(params, 'till', 'end_time')
+        if since is not None:
+            request['start_time'] = since / 1000
+            if endTime is None:
+                request['end_time'] = self.milliseconds() / 1000
+        if endTime is not None:
+            request['end_time'] = endTime / 1000
+        response = await self.publicGetSpotMarginHistory(self.extend(request, params))
+        #
+        #    {
+        #        "success": True,
+        #        "result": [
+        #            {
+        #                "coin": "PYPL",
+        #                "time": "2022-01-24T13:00:00+00:00",
+        #                "size": 0.00500172,
+        #                "rate": 1e-6
+        #            },
+        #            ...
+        #        ]
+        #    }
+        #
+        result = self.safe_value(response, 'result')
+        # How to calculate borrow rate
+        # https://help.ftx.com/hc/en-us/articles/360053007671-Spot-Margin-Trading-Explainer
+        takerFee = str(self.fees['trading']['taker'])
+        spotMarginBorrowRate = Precise.string_mul('500', takerFee)
+        borrowRateHistories = {}
+        for i in range(0, len(result)):
+            item = result[i]
+            currency = self.safe_currency_code(self.safe_string(item, 'coin'))
+            if not (currency in borrowRateHistories):
+                borrowRateHistories[currency] = []
+            datetime = self.safe_string(item, 'time')
+            lendingRate = self.safe_string(item, 'rate')
+            borrowRateHistories[currency].append({
+                'currency': currency,
+                'rate': Precise.string_mul(lendingRate, Precise.string_add('1', spotMarginBorrowRate)),
+                'timestamp': self.parse8601(datetime),
+                'datetime': datetime,
+                'info': item,
+            })
+        keys = list(borrowRateHistories.keys())
+        for i in range(0, len(keys)):
+            key = keys[i]
+            borrowRateHistories[key] = self.filter_by_currency_since_limit(borrowRateHistories[key], key, since, limit)
+        return borrowRateHistories
+
+    async def fetch_borrow_rate_history(self, code, since=None, limit=None, params={}):
+        histories = await self.fetch_borrow_rate_histories(since, limit, params)
+        borrowRateHistory = self.safe_value(histories, code)
+        if borrowRateHistory is None:
+            raise BadRequest(self.id + '.fetchBorrowRateHistory returned no data for ' + code)
+        else:
+            return borrowRateHistory

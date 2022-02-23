@@ -31,6 +31,7 @@ class probit(Exchange):
             'countries': ['SC', 'KR'],  # Seychelles, South Korea
             'rateLimit': 50,  # ms
             'has': {
+                'CORS': True,
                 'spot': True,
                 'margin': False,
                 'swap': False,
@@ -38,12 +39,12 @@ class probit(Exchange):
                 'option': False,
                 'addMargin': False,
                 'cancelOrder': True,
-                'CORS': True,
                 'createMarketOrder': True,
                 'createOrder': True,
                 'createReduceOnlyOrder': False,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
@@ -58,6 +59,7 @@ class probit(Exchange):
                 'fetchIndexOHLCV': False,
                 'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
@@ -192,6 +194,7 @@ class probit(Exchange):
             },
             'commonCurrencies': {
                 'AUTO': 'Cube',
+                'AZU': 'Azultec',
                 'BCC': 'BCC',
                 'BDP': 'BidiPass',
                 'BIRD': 'Birdchain',
@@ -199,6 +202,8 @@ class probit(Exchange):
                 'BTCBULL': 'BULL',
                 'CBC': 'CryptoBharatCoin',
                 'CHE': 'Chellit',
+                'CLR': 'Color Platform',
+                'CTK': 'Cryptyk',
                 'DIP': 'Dipper',
                 'EGC': 'EcoG9coin',
                 'EPS': 'Epanus',  # conflict with EPS Ellipsis https://github.com/ccxt/ccxt/issues/8909
@@ -209,8 +214,10 @@ class probit(Exchange):
                 'GOL': 'Goldofir',
                 'GRB': 'Global Reward Bank',
                 'HBC': 'Hybrid Bank Cash',
+                'HUSL': 'The Hustle App',
                 'LBK': 'Legal Block',
                 'ORC': 'Oracle System',
+                'PYE': 'CreamPYE',
                 'ROOK': 'Reckoon',
                 'SOC': 'Soda Coin',
                 'SST': 'SocialSwap',
@@ -292,8 +299,8 @@ class probit(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_number(market, 'price_increment'),
                     'amount': self.parse_number(amountTickSize),
+                    'price': self.safe_number(market, 'price_increment'),
                     'cost': self.parse_number(costTickSize),
                 },
                 'limits': {

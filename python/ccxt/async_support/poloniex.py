@@ -33,6 +33,7 @@ class poloniex(Exchange):
             'certified': False,
             'pro': True,
             'has': {
+                'CORS': None,
                 'spot': True,
                 'margin': None,  # has but not fully implemented
                 'swap': None,  # has but not fully implemented
@@ -40,7 +41,6 @@ class poloniex(Exchange):
                 'option': None,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
-                'CORS': None,
                 'createDepositAddress': True,
                 'createMarketOrder': None,
                 'createOrder': True,
@@ -238,7 +238,7 @@ class poloniex(Exchange):
                 },
                 'broad': {
                     'Total must be at least': InvalidOrder,  # {"error":"Total must be at least 0.0001."}
-                    'This account is frozen.': AccountSuspended,
+                    'This account is frozen': AccountSuspended,  # {"error":"This account is frozen for trading."} or {"error":"This account is frozen."}
                     'This account is locked.': AccountSuspended,  # {"error":"This account is locked."}
                     'Not enough': InsufficientFunds,
                     'Nonce must be greater': InvalidNonce,
@@ -346,8 +346,8 @@ class poloniex(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': 8,
-                    'amount': 8,
+                    'amount': int('8'),
+                    'price': int('8'),
                 },
                 'limits': self.extend(self.limits, {
                     'leverage': {
@@ -1161,7 +1161,8 @@ class poloniex(Exchange):
         response = await self.privatePostGenerateNewAddress(self.extend(request, params))
         address = None
         tag = None
-        if response['success'] == 1:
+        success = self.safe_string(response, 'success')
+        if success == '1':
             address = self.safe_string(response, 'response')
         self.check_address(address)
         if currency is not None:

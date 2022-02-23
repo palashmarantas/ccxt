@@ -14,22 +14,36 @@ class lykke(Exchange):
             'id': 'lykke',
             'name': 'Lykke',
             'countries': ['CH'],
-            'version': 'v1',
+            'version': 'v1',  # v2 - https://lykkecity.github.io/Trading-API/
             'rateLimit': 200,
             'has': {
+                'CORS': None,
+                'spot': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
-                'CORS': None,
                 'createOrder': True,
                 'fetchBalance': True,
                 'fetchClosedOrders': True,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': 'emulated',
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
                 'fetchOrders': True,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTrades': True,
             },
@@ -322,22 +336,19 @@ class lykke(Exchange):
     def fetch_markets(self, params={}):
         markets = self.publicGetAssetPairs()
         #
-        #     [{               Id: "AEBTC",
-        #                      Name: "AE/BTC",
-        #                  Accuracy:  6,
-        #          InvertedAccuracy:  8,
-        #               BaseAssetId: "6f75280b-a005-4016-a3d8-03dc644e8912",
+        #    [
+        #        {
+        #            Id: "AEBTC",
+        #            Name: "AE/BTC",
+        #            Accuracy:  6,
+        #            InvertedAccuracy:  8,
+        #            BaseAssetId: "6f75280b-a005-4016-a3d8-03dc644e8912",
         #            QuotingAssetId: "BTC",
-        #                 MinVolume:  0.4,
-        #         MinInvertedVolume:  0.0001                                 },
-        #       {               Id: "AEETH",
-        #                      Name: "AE/ETH",
-        #                  Accuracy:  6,
-        #          InvertedAccuracy:  8,
-        #               BaseAssetId: "6f75280b-a005-4016-a3d8-03dc644e8912",
-        #            QuotingAssetId: "ETH",
-        #                 MinVolume:  0.4,
-        #         MinInvertedVolume:  0.001                                  }]
+        #            MinVolume:  0.4,
+        #            MinInvertedVolume:  0.0001
+        #        },
+        #        ...
+        #    ]
         #
         result = []
         for i in range(0, len(markets)):
@@ -347,30 +358,45 @@ class lykke(Exchange):
             baseId, quoteId = name.split('/')
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            symbol = base + '/' + quote
-            pricePrecision = self.safe_string(market, 'Accuracy')
-            priceLimit = self.parse_precision(pricePrecision)
-            precision = {
-                'price': int(pricePrecision),
-                'amount': self.safe_integer(market, 'InvertedAccuracy'),
-            }
             result.append({
                 'id': id,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': None,
+                'baseId': baseId,
+                'quoteId': quoteId,
+                'settleId': None,
                 'type': 'spot',
                 'spot': True,
+                'margin': None,
+                'swap': False,
+                'future': False,
+                'option': False,
                 'active': True,
-                'info': market,
-                'precision': precision,
+                'contract': False,
+                'linear': None,
+                'inverse': None,
+                'contractSize': None,
+                'expiry': None,
+                'expiryDatetime': None,
+                'strike': None,
+                'optionType': None,
+                'precision': {
+                    'amount': self.safe_integer(market, 'InvertedAccuracy'),
+                    'price': self.safe_integer(market, 'Accuracy'),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': self.safe_number(market, 'MinVolume'),
                         'max': None,
                     },
                     'price': {
-                        'min': self.parse_number(priceLimit),
+                        'min': None,
                         'max': None,
                     },
                     'cost': {
@@ -378,8 +404,7 @@ class lykke(Exchange):
                         'max': None,
                     },
                 },
-                'baseId': None,
-                'quoteId': None,
+                'info': market,
             })
         return result
 

@@ -43,32 +43,38 @@ class bittrex(Exchange):
             'pro': True,
             # new metainfo interface
             'has': {
+                'CORS': None,
                 'spot': True,
                 'margin': False,
                 'swap': False,
                 'future': False,
                 'option': False,
+                'addMargin': False,
                 'cancelAllOrders': True,
                 'cancelOrder': True,
-                'CORS': None,
                 'createDepositAddress': True,
-                'createReduceOnlyOrder': False,
                 'createMarketOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
+                'fetchFundingFees': None,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
                 'fetchIsolatedPositions': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': 'emulated',
@@ -85,6 +91,8 @@ class bittrex(Exchange):
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': True,
+                'fetchTradingFees': True,
                 'fetchTransactions': None,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
@@ -139,6 +147,10 @@ class bittrex(Exchange):
                 'private': {
                     'get': [
                         'account',
+                        'account/fees/fiat',
+                        'account/fees/fiat/{currencySymbol}',
+                        'account/fees/trading',
+                        'account/fees/trading/{marketSymbol}',
                         'account/volume',
                         'addresses',
                         'addresses/{currencySymbol}',
@@ -264,6 +276,7 @@ class bittrex(Exchange):
             },
             'commonCurrencies': {
                 'BIFI': 'Bifrost Finance',
+                'BTR': 'BTRIPS',
                 'MEME': 'Memetic',  # conflict with Meme Inu
                 'MER': 'Mercury',  # conflict with Mercurial Finance
                 'PROS': 'Pros.Finance',
@@ -310,7 +323,6 @@ class bittrex(Exchange):
             quoteId = self.safe_string(market, 'quoteCurrencySymbol')
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            pricePrecision = self.safe_integer(market, 'precision', 8)
             status = self.safe_string(market, 'status')
             result.append({
                 'id': self.safe_string(market, 'symbol'),
@@ -338,9 +350,13 @@ class bittrex(Exchange):
                 'optionType': None,
                 'precision': {
                     'amount': int('8'),
-                    'price': pricePrecision,
+                    'price': self.safe_integer(market, 'precision', 8),
                 },
                 'limits': {
+                    'leverage': {
+                        'min': None,
+                        'max': None,
+                    },
                     'amount': {
                         'min': self.safe_number(market, 'minTradeSize'),
                         'max': None,
@@ -350,10 +366,6 @@ class bittrex(Exchange):
                         'max': None,
                     },
                     'cost': {
-                        'min': None,
-                        'max': None,
-                    },
-                    'leverage': {
                         'min': None,
                         'max': None,
                     },
@@ -676,6 +688,57 @@ class bittrex(Exchange):
         #     ]
         #
         return self.parse_trades(response, market, since, limit)
+
+    def fetch_trading_fee(self, symbol, params={}):
+        self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'marketSymbol': market['id'],
+        }
+        response = self.privateGetAccountFeesTradingMarketSymbol(self.extend(request, params))
+        #
+        #     {
+        #         "marketSymbol":"1INCH-ETH",
+        #         "makerRate":"0.00750000",
+        #         "takerRate":"0.00750000"
+        #     }
+        #
+        return self.parse_trading_fee(response, market)
+
+    def fetch_trading_fees(self, params={}):
+        self.load_markets()
+        response = self.privateGetAccountFeesTrading(params)
+        #
+        #     [
+        #         {"marketSymbol":"1ECO-BTC","makerRate":"0.00750000","takerRate":"0.00750000"},
+        #         {"marketSymbol":"1ECO-USDT","makerRate":"0.00750000","takerRate":"0.00750000"},
+        #         {"marketSymbol":"1INCH-BTC","makerRate":"0.00750000","takerRate":"0.00750000"},
+        #         {"marketSymbol":"1INCH-ETH","makerRate":"0.00750000","takerRate":"0.00750000"},
+        #         {"marketSymbol":"1INCH-USD","makerRate":"0.00750000","takerRate":"0.00750000"},
+        #     ]
+        #
+        return self.parse_trading_fees(response)
+
+    def parse_trading_fee(self, fee, market=None):
+        marketId = self.safe_string(fee, 'marketSymbol')
+        maker = self.safe_number(fee, 'makerRate')
+        taker = self.safe_number(fee, 'takerRate')
+        return {
+            'info': fee,
+            'symbol': self.safe_symbol(marketId, market),
+            'maker': maker,
+            'taker': taker,
+        }
+
+    def parse_trading_fees(self, fees):
+        result = {
+            'info': fees,
+        }
+        for i in range(0, len(fees)):
+            fee = self.parse_trading_fee(fees[i])
+            symbol = fee['symbol']
+            result[symbol] = fee
+        return result
 
     def parse_ohlcv(self, ohlcv, market=None):
         #

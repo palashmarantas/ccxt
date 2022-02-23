@@ -21,6 +21,7 @@ class poloniex extends Exchange {
             'certified' => false,
             'pro' => true,
             'has' => array(
+                'CORS' => null,
                 'spot' => true,
                 'margin' => null, // has but not fully implemented
                 'swap' => null, // has but not fully implemented
@@ -28,7 +29,6 @@ class poloniex extends Exchange {
                 'option' => null,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
-                'CORS' => null,
                 'createDepositAddress' => true,
                 'createMarketOrder' => null,
                 'createOrder' => true,
@@ -226,7 +226,7 @@ class poloniex extends Exchange {
                 ),
                 'broad' => array(
                     'Total must be at least' => '\\ccxt\\InvalidOrder', // array("error":"Total must be at least 0.0001.")
-                    'This account is frozen.' => '\\ccxt\\AccountSuspended',
+                    'This account is frozen' => '\\ccxt\\AccountSuspended', // array("error":"This account is frozen for trading.") || array("error":"This account is frozen.")
                     'This account is locked.' => '\\ccxt\\AccountSuspended', // array("error":"This account is locked.")
                     'Not enough' => '\\ccxt\\InsufficientFunds',
                     'Nonce must be greater' => '\\ccxt\\InvalidNonce',
@@ -342,8 +342,8 @@ class poloniex extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => 8,
-                    'amount' => 8,
+                    'amount' => intval('8'),
+                    'price' => intval('8'),
                 ),
                 'limits' => array_merge($this->limits, array(
                     'leverage' => array(
@@ -1223,7 +1223,8 @@ class poloniex extends Exchange {
         $response = yield $this->privatePostGenerateNewAddress (array_merge($request, $params));
         $address = null;
         $tag = null;
-        if ($response['success'] === 1) {
+        $success = $this->safe_string($response, 'success');
+        if ($success === '1') {
             $address = $this->safe_string($response, 'response');
         }
         $this->check_address($address);

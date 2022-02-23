@@ -18,6 +18,7 @@ module.exports = class vcc extends Exchange {
             'rateLimit': 1000,
             'version': 'v3',
             'has': {
+                'CORS': undefined,
                 'spot': true,
                 'margin': false,
                 'swap': false,
@@ -31,6 +32,7 @@ module.exports = class vcc extends Exchange {
                 'editOrder': undefined,
                 'fetchBalance': true,
                 'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
@@ -45,6 +47,7 @@ module.exports = class vcc extends Exchange {
                 'fetchIndexOHLCV': false,
                 'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -233,8 +236,8 @@ module.exports = class vcc extends Exchange {
                 'strike': undefined,
                 'optionType': undefined,
                 'precision': {
-                    'price': this.safeInteger (precision, 'price'),
                     'amount': this.safeInteger (precision, 'amount'),
+                    'price': this.safeInteger (precision, 'price'),
                     'cost': this.safeInteger (precision, 'cost'),
                 },
                 'limits': {

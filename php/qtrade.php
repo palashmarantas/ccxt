@@ -26,6 +26,7 @@ class qtrade extends Exchange {
                 'referral' => 'https://qtrade.io/?ref=BKOQWVFGRH2C',
             ),
             'has' => array(
+                'CORS' => null,
                 'spot' => true,
                 'margin' => false,
                 'swap' => false,
@@ -33,12 +34,12 @@ class qtrade extends Exchange {
                 'option' => false,
                 'addMargin' => false,
                 'cancelOrder' => true,
-                'CORS' => null,
                 'createMarketOrder' => null,
                 'createOrder' => true,
                 'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -54,6 +55,7 @@ class qtrade extends Exchange {
                 'fetchIndexOHLCV' => false,
                 'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
@@ -229,8 +231,8 @@ class qtrade extends Exchange {
                 'strike' => null,
                 'optionType' => null,
                 'precision' => array(
-                    'price' => $this->safe_integer($market, 'base_precision'),
                     'amount' => $this->safe_integer($market, 'market_precision'),
+                    'price' => $this->safe_integer($market, 'base_precision'),
                 ),
                 'limits' => array(
                     'leverage' => array(

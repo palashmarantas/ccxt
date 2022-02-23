@@ -16,19 +16,49 @@ module.exports = class lbank extends Exchange {
             'countries': [ 'CN' ],
             'version': 'v1',
             'has': {
+                'CORS': undefined,
+                'spot': true,
+                'margin': false,
+                'swap': false,
+                'future': false,
+                'option': false,
+                'addMargin': false,
                 'cancelOrder': true,
                 'createOrder': true,
+                'createReduceOnlyOrder': false,
                 'fetchBalance': true,
+                'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
+                'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': true,
+                'fetchFundingHistory': false,
+                'fetchFundingRate': false,
+                'fetchFundingRateHistory': false,
+                'fetchFundingRates': false,
+                'fetchIndexOHLCV': false,
+                'fetchIsolatedPositions': false,
+                'fetchLeverage': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
+                'fetchMarkOHLCV': false,
                 'fetchOHLCV': true,
                 'fetchOpenOrders': undefined, // status 0 API doesn't work
                 'fetchOrder': true,
                 'fetchOrderBook': true,
                 'fetchOrders': true,
+                'fetchPosition': false,
+                'fetchPositions': false,
+                'fetchPositionsRisk': false,
+                'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'reduceMargin': false,
+                'setLeverage': false,
+                'setMarginMode': false,
+                'setPositionMode': false,
                 'withdraw': true,
             },
             'timeframes': {
@@ -99,6 +129,17 @@ module.exports = class lbank extends Exchange {
 
     async fetchMarkets (params = {}) {
         const response = await this.publicGetAccuracy (params);
+        //
+        //    [
+        //        {
+        //            "symbol": "btc_usdt",
+        //            "quantityAccuracy": "4",
+        //            "minTranQua": "0.0001",
+        //            "priceAccuracy": "2"
+        //        },
+        //        ...
+        //    ]
+        //
         const result = [];
         for (let i = 0; i < response.length; i++) {
             const market = response[i];
@@ -117,30 +158,46 @@ module.exports = class lbank extends Exchange {
             }
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
-            const symbol = base + '/' + quote;
-            const precision = {
-                'amount': this.safeInteger (market, 'quantityAccuracy'),
-                'price': this.safeInteger (market, 'priceAccuracy'),
-            };
             result.push ({
                 'id': id,
-                'symbol': symbol,
+                'symbol': base + '/' + quote,
                 'base': base,
                 'quote': quote,
+                'settle': undefined,
                 'baseId': baseId,
                 'quoteId': quoteId,
+                'settleId': undefined,
                 'type': 'spot',
                 'spot': true,
+                'margin': false,
+                'swap': false,
+                'future': false,
+                'option': false,
                 'active': true,
-                'precision': precision,
+                'contract': false,
+                'linear': undefined,
+                'inverse': undefined,
+                'contractSize': undefined,
+                'expiry': undefined,
+                'expiryDatetime': undefined,
+                'strike': undefined,
+                'optionType': undefined,
+                'precision': {
+                    'amount': this.safeInteger (market, 'quantityAccuracy'),
+                    'price': this.safeInteger (market, 'priceAccuracy'),
+                },
                 'limits': {
+                    'leverage': {
+                        'min': undefined,
+                        'max': undefined,
+                    },
                     'amount': {
-                        'min': Math.pow (10, -precision['amount']),
+                        'min': undefined,
                         'max': undefined,
                     },
                     'price': {
-                        'min': Math.pow (10, -precision['price']),
-                        'max': Math.pow (10, precision['price']),
+                        'min': undefined,
+                        'max': undefined,
                     },
                     'cost': {
                         'min': undefined,
@@ -252,10 +309,7 @@ module.exports = class lbank extends Exchange {
     }
 
     parseTrade (trade, market = undefined) {
-        let symbol = undefined;
-        if (market !== undefined) {
-            symbol = market['symbol'];
-        }
+        market = this.safeMarket (undefined, market);
         const timestamp = this.safeInteger (trade, 'date_ms');
         const priceString = this.safeString (trade, 'price');
         const amountString = this.safeString (trade, 'amount');
@@ -271,7 +325,7 @@ module.exports = class lbank extends Exchange {
             'info': this.safeValue (trade, 'info', trade),
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': undefined,
             'type': type,
             'side': side,

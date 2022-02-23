@@ -64,14 +64,16 @@ module.exports = class Exchange {
             'has': {
                 'publicAPI': true,
                 'privateAPI': true,
+                'CORS': undefined,
+                'spot': undefined,
                 'margin': undefined,
                 'swap': undefined,
                 'future': undefined,
+                'option': undefined,
                 'addMargin': undefined,
                 'cancelAllOrders': undefined,
                 'cancelOrder': true,
                 'cancelOrders': undefined,
-                'CORS': undefined,
                 'createDepositAddress': undefined,
                 'createLimitOrder': true,
                 'createMarketOrder': true,
@@ -104,6 +106,7 @@ module.exports = class Exchange {
                 'fetchL2OrderBook': true,
                 'fetchLedger': undefined,
                 'fetchLedgerEntry': undefined,
+                'fetchLeverageTiers': undefined,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': undefined,
                 'fetchMyTrades': undefined,
@@ -704,8 +707,10 @@ module.exports = class Exchange {
             if (this.verbose) {
                 this.log ("handleRestResponse:\n", this.id, method, url, response.status, response.statusText, "\nResponseHeaders:\n", responseHeaders, "\nResponseBody:\n", responseBody, "\n")
             }
-            this.handleErrors (response.status, response.statusText, url, method, responseHeaders, responseBody, json, requestHeaders, requestBody)
-            this.handleHttpStatusCode (response.status, response.statusText, url, method, responseBody)
+            const skipFurtherErrorHandling = this.handleErrors (response.status, response.statusText, url, method, responseHeaders, responseBody, json, requestHeaders, requestBody)
+            if (!skipFurtherErrorHandling) {
+                this.handleHttpStatusCode (response.status, response.statusText, url, method, responseBody)
+            }
             return json || responseBody
         })
     }
@@ -720,8 +725,32 @@ module.exports = class Exchange {
 
     setMarkets (markets, currencies = undefined) {
         const values = Object.values (markets).map ((market) => deepExtend ({
-            'limits': this.limits,
+            'id': undefined,
+            'symbol': undefined,
+            'base': undefined,
+            'quote': undefined,
+            'baseId': undefined,
+            'quoteId': undefined,
+            'active': undefined,
+            'type': undefined,
+            'linear': undefined,
+            'inverse': undefined,
+            'spot': false,
+            'swap': false,
+            'future': false,
+            'option': false,
+            'margin': false,
+            'contract': false,
+            'contractSize': undefined,
+            'expiry': undefined,
+            'expiryDatetime': undefined,
+            'optionType': undefined,
+            'strike': undefined,
+            'settle': undefined,
+            'settleId': undefined,
             'precision': this.precision,
+            'limits': this.limits,
+            'info': undefined,
         }, this.fees['trading'], market))
         this.markets = indexBy (values, 'symbol')
         this.markets_by_id = indexBy (markets, 'id')

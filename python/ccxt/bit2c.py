@@ -28,15 +28,44 @@ class bit2c(Exchange):
             'countries': ['IL'],  # Israel
             'rateLimit': 3000,
             'has': {
-                'cancelOrder': True,
                 'CORS': None,
+                'spot': True,
+                'margin': False,
+                'swap': False,
+                'future': False,
+                'option': False,
+                'addMargin': False,
+                'cancelOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
+                'fetchFundingHistory': False,
+                'fetchFundingRate': False,
+                'fetchFundingRateHistory': False,
+                'fetchFundingRates': False,
+                'fetchIndexOHLCV': False,
+                'fetchIsolatedPositions': False,
+                'fetchLeverage': False,
+                'fetchLeverageTiers': False,
+                'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOpenOrders': True,
                 'fetchOrderBook': True,
+                'fetchPosition': False,
+                'fetchPositions': False,
+                'fetchPositionsRisk': False,
+                'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTrades': True,
+                'reduceMargin': False,
+                'setLeverage': False,
+                'setMarginMode': False,
+                'setPositionMode': False,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27766119-3593220e-5ece-11e7-8b3a-5a041f6bcc3f.jpg',
@@ -284,9 +313,7 @@ class bit2c(Exchange):
         timestamp = self.safe_integer(order, 'created')
         price = self.safe_string(order, 'price')
         amount = self.safe_string(order, 'amount')
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         side = self.safe_value(order, 'type')
         if side == 0:
             side = 'buy'
@@ -301,7 +328,7 @@ class bit2c(Exchange):
             'datetime': self.iso8601(timestamp),
             'lastTradeTimestamp': None,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': None,
             'timeInForce': None,
             'postOnly': None,
@@ -378,15 +405,13 @@ class bit2c(Exchange):
                     side = 'buy'
                 else:
                     side = 'sell'
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         return self.safe_trade({
             'info': trade,
             'id': id,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'order': orderId,
             'type': None,
             'side': side,

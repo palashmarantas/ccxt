@@ -33,6 +33,7 @@ class btcbox(Exchange):
             'rateLimit': 1000,
             'version': 'v1',
             'has': {
+                'CORS': None,
                 'spot': True,
                 'margin': False,
                 'swap': False,
@@ -40,11 +41,11 @@ class btcbox(Exchange):
                 'option': False,
                 'addMargin': False,
                 'cancelOrder': True,
-                'CORS': None,
                 'createOrder': True,
                 'createReduceOnlyOrder': False,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
@@ -199,9 +200,7 @@ class btcbox(Exchange):
         #      }
         #
         timestamp = self.safe_timestamp(trade, 'date')
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         id = self.safe_string(trade, 'tid')
         priceString = self.safe_string(trade, 'price')
         amountString = self.safe_string(trade, 'amount')
@@ -213,7 +212,7 @@ class btcbox(Exchange):
             'order': None,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
             'side': side,
             'takerOrMaker': None,
@@ -317,9 +316,7 @@ class btcbox(Exchange):
             if Precise.string_equals(remaining, '0'):
                 status = 'closed'
         trades = None  # todo: self.parse_trades(order['trades'])
-        symbol = None
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(None, market)
         side = self.safe_string(order, 'type')
         return self.safe_order({
             'id': id,
@@ -335,7 +332,7 @@ class btcbox(Exchange):
             'timeInForce': None,
             'postOnly': None,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'price': price,
             'stopPrice': None,
             'cost': None,

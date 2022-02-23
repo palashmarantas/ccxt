@@ -37,6 +37,7 @@ class qtrade(Exchange):
                 'referral': 'https://qtrade.io/?ref=BKOQWVFGRH2C',
             },
             'has': {
+                'CORS': None,
                 'spot': True,
                 'margin': False,
                 'swap': False,
@@ -44,12 +45,12 @@ class qtrade(Exchange):
                 'option': False,
                 'addMargin': False,
                 'cancelOrder': True,
-                'CORS': None,
                 'createMarketOrder': None,
                 'createOrder': True,
                 'createReduceOnlyOrder': False,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
@@ -65,6 +66,7 @@ class qtrade(Exchange):
                 'fetchIndexOHLCV': False,
                 'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
@@ -239,8 +241,8 @@ class qtrade(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(market, 'base_precision'),
                     'amount': self.safe_integer(market, 'market_precision'),
+                    'price': self.safe_integer(market, 'base_precision'),
                 },
                 'limits': {
                     'leverage': {

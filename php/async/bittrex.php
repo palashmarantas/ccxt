@@ -28,32 +28,38 @@ class bittrex extends Exchange {
             'pro' => true,
             // new metainfo interface
             'has' => array(
+                'CORS' => null,
                 'spot' => true,
                 'margin' => false,
                 'swap' => false,
                 'future' => false,
                 'option' => false,
+                'addMargin' => false,
                 'cancelAllOrders' => true,
                 'cancelOrder' => true,
-                'CORS' => null,
                 'createDepositAddress' => true,
-                'createReduceOnlyOrder' => false,
                 'createMarketOrder' => true,
                 'createOrder' => true,
+                'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
+                'fetchBorrowRatesPerSymbol' => false,
                 'fetchClosedOrders' => true,
                 'fetchCurrencies' => true,
                 'fetchDepositAddress' => true,
                 'fetchDeposits' => true,
+                'fetchFundingFees' => null,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
                 'fetchIsolatedPositions' => false,
+                'fetchLeverage' => false,
+                'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => 'emulated',
@@ -70,6 +76,8 @@ class bittrex extends Exchange {
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => true,
+                'fetchTradingFees' => true,
                 'fetchTransactions' => null,
                 'fetchWithdrawals' => true,
                 'reduceMargin' => false,
@@ -124,6 +132,10 @@ class bittrex extends Exchange {
                 'private' => array(
                     'get' => array(
                         'account',
+                        'account/fees/fiat',
+                        'account/fees/fiat/{currencySymbol}',
+                        'account/fees/trading',
+                        'account/fees/trading/{marketSymbol}',
                         'account/volume',
                         'addresses',
                         'addresses/{currencySymbol}',
@@ -249,6 +261,7 @@ class bittrex extends Exchange {
             ),
             'commonCurrencies' => array(
                 'BIFI' => 'Bifrost Finance',
+                'BTR' => 'BTRIPS',
                 'MEME' => 'Memetic', // conflict with Meme Inu
                 'MER' => 'Mercury', // conflict with Mercurial Finance
                 'PROS' => 'Pros.Finance',
@@ -298,7 +311,6 @@ class bittrex extends Exchange {
             $quoteId = $this->safe_string($market, 'quoteCurrencySymbol');
             $base = $this->safe_currency_code($baseId);
             $quote = $this->safe_currency_code($quoteId);
-            $pricePrecision = $this->safe_integer($market, 'precision', 8);
             $status = $this->safe_string($market, 'status');
             $result[] = array(
                 'id' => $this->safe_string($market, 'symbol'),
@@ -326,9 +338,13 @@ class bittrex extends Exchange {
                 'optionType' => null,
                 'precision' => array(
                     'amount' => intval('8'),
-                    'price' => $pricePrecision,
+                    'price' => $this->safe_integer($market, 'precision', 8),
                 ),
                 'limits' => array(
+                    'leverage' => array(
+                        'min' => null,
+                        'max' => null,
+                    ),
                     'amount' => array(
                         'min' => $this->safe_number($market, 'minTradeSize'),
                         'max' => null,
@@ -338,10 +354,6 @@ class bittrex extends Exchange {
                         'max' => null,
                     ),
                     'cost' => array(
-                        'min' => null,
-                        'max' => null,
-                    ),
-                    'leverage' => array(
                         'min' => null,
                         'max' => null,
                     ),
@@ -682,6 +694,62 @@ class bittrex extends Exchange {
         //     )
         //
         return $this->parse_trades($response, $market, $since, $limit);
+    }
+
+    public function fetch_trading_fee($symbol, $params = array ()) {
+        yield $this->load_markets();
+        $market = $this->market($symbol);
+        $request = array(
+            'marketSymbol' => $market['id'],
+        );
+        $response = yield $this->privateGetAccountFeesTradingMarketSymbol (array_merge($request, $params));
+        //
+        //     {
+        //         "marketSymbol":"1INCH-ETH",
+        //         "makerRate":"0.00750000",
+        //         "takerRate":"0.00750000"
+        //     }
+        //
+        return $this->parse_trading_fee($response, $market);
+    }
+
+    public function fetch_trading_fees($params = array ()) {
+        yield $this->load_markets();
+        $response = yield $this->privateGetAccountFeesTrading ($params);
+        //
+        //     array(
+        //         array("marketSymbol":"1ECO-BTC","makerRate":"0.00750000","takerRate":"0.00750000"),
+        //         array("marketSymbol":"1ECO-USDT","makerRate":"0.00750000","takerRate":"0.00750000"),
+        //         array("marketSymbol":"1INCH-BTC","makerRate":"0.00750000","takerRate":"0.00750000"),
+        //         array("marketSymbol":"1INCH-ETH","makerRate":"0.00750000","takerRate":"0.00750000"),
+        //         array("marketSymbol":"1INCH-USD","makerRate":"0.00750000","takerRate":"0.00750000"),
+        //     )
+        //
+        return $this->parse_trading_fees($response);
+    }
+
+    public function parse_trading_fee($fee, $market = null) {
+        $marketId = $this->safe_string($fee, 'marketSymbol');
+        $maker = $this->safe_number($fee, 'makerRate');
+        $taker = $this->safe_number($fee, 'takerRate');
+        return array(
+            'info' => $fee,
+            'symbol' => $this->safe_symbol($marketId, $market),
+            'maker' => $maker,
+            'taker' => $taker,
+        );
+    }
+
+    public function parse_trading_fees($fees) {
+        $result = array(
+            'info' => $fees,
+        );
+        for ($i = 0; $i < count($fees); $i++) {
+            $fee = $this->parse_trading_fee($fees[$i]);
+            $symbol = $fee['symbol'];
+            $result[$symbol] = $fee;
+        }
+        return $result;
     }
 
     public function parse_ohlcv($ohlcv, $market = null) {

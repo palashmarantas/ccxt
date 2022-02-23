@@ -16,6 +16,7 @@ declare module 'ccxt' {
     export class ExchangeError extends BaseError {}
     export class AuthenticationError extends ExchangeError {}
     export class PermissionDenied extends AuthenticationError {}
+    export class AccountNotEnabled extends PermissionDenied {}
     export class AccountSuspended extends AuthenticationError {}
     export class ArgumentsRequired extends ExchangeError {}
     export class BadRequest extends ExchangeError {}
@@ -47,7 +48,7 @@ declare module 'ccxt' {
     export const exchanges: string[];
 
     export interface MinMax {
-        min: number;
+        min: number | undefined;
         max: number | undefined;
     }
 
@@ -58,19 +59,38 @@ declare module 'ccxt' {
         quote: string;
         baseId: string;
         quoteId: string;
+        active?: boolean | undefined;
         type?: string;
         spot?: boolean;
         margin?: boolean;
         swap?: boolean;
         future?: boolean;
         option?: boolean;
-        active: boolean;
-        precision: { base: number, quote: number, amount: number, price: number };
-        limits: { amount: MinMax, price: MinMax, cost?: MinMax };
-        tierBased: boolean;
-        percentage: boolean;
-        taker: number;
-        maker: number;
+        contract?: boolean;
+        settle?: string | undefined;
+        settleId?: string | undefined;
+        contractSize?: number | undefined;
+        linear?: boolean | undefined;
+        inverse?: boolean | undefined;
+        expiry?: number | undefined;
+        expiryDatetime?: string | undefined;
+        strike?: number | undefined;
+        optionType?: string | undefined;
+        taker?: number | undefined;
+        maker?: number | undefined;
+        percentage?: boolean | undefined;
+        tierBased?: boolean | undefined;
+        feeSide?: string | undefined;
+        precision: {
+            amount: number | undefined,
+            price: number | undefined
+        };
+        limits: { 
+            amount?: MinMax,
+            cost?: MinMax,
+            leverage?: MinMax,
+            price?: MinMax,
+        };
         info: any;
     }
 
@@ -506,7 +526,6 @@ declare module 'ccxt' {
     export class kucoinfutures extends kucoin {}
     export class kuna extends Exchange {}
     export class latoken extends Exchange {}
-    export class latoken1 extends Exchange {}
     export class lbank extends Exchange {}
     export class liquid extends Exchange {}
     export class luno extends Exchange {}
@@ -516,10 +535,10 @@ declare module 'ccxt' {
     export class ndax extends Exchange {}
     export class novadax extends Exchange {}
     export class oceanex extends Exchange {}
-    export class okcoin extends okex3 {}
-    export class okex extends Exchange {}
-    export class okex3 extends Exchange {}
+    export class okcoin extends Exchange {}
+    export class okex extends okx {}
     export class okex5 extends okex {}
+    export class okx extends Exchange {}
     export class paymium extends Exchange {}
     export class phemex extends Exchange {}
     export class poloniex extends Exchange {}
@@ -536,6 +555,7 @@ declare module 'ccxt' {
     export class wavesexchange extends Exchange {}
     export class wazirx extends Exchange {}
     export class whitebit extends Exchange {}
+    export class woo extends Exchange {}
     export class xena extends Exchange {}
     export class yobit extends Exchange {}
     export class zaif extends Exchange {}
@@ -627,7 +647,6 @@ declare module 'ccxt' {
         | 'kucoinfutures'
         | 'kuna'
         | 'latoken'
-        | 'latoken1'
         | 'lbank'
         | 'liquid'
         | 'luno'
@@ -639,8 +658,8 @@ declare module 'ccxt' {
         | 'oceanex'
         | 'okcoin'
         | 'okex'
-        | 'okex3'
         | 'okex5'
+        | 'okx'
         | 'paymium'
         | 'phemex'
         | 'poloniex'
@@ -657,6 +676,7 @@ declare module 'ccxt' {
         | 'wavesexchange'
         | 'wazirx'
         | 'whitebit'
+        | 'woo'
         | 'xena'
         | 'yobit'
         | 'zaif'

@@ -4,7 +4,7 @@
 
 # -----------------------------------------------------------------------------
 
-__version__ = '1.70.50'
+__version__ = '1.73.96'
 
 # -----------------------------------------------------------------------------
 
@@ -256,14 +256,16 @@ class Exchange(object):
     has = {
         'publicAPI': True,
         'privateAPI': True,
+        'CORS': None,
+        'spot': None,
         'margin': None,
         'swap': None,
         'future': None,
+        'option': None,
         'addMargin': None,
         'cancelAllOrders': None,
         'cancelOrder': True,
         'cancelOrders': None,
-        'CORS': None,
         'createDepositAddress': None,
         'createLimitOrder': True,
         'createMarketOrder': True,
@@ -296,6 +298,7 @@ class Exchange(object):
         'fetchL2OrderBook': True,
         'fetchLedger': None,
         'fetchLedgerEntry': None,
+        'fetchLeverageTiers': None,
         'fetchMarkets': True,
         'fetchMarkOHLCV': None,
         'fetchMyTrades': None,
@@ -669,8 +672,9 @@ class Exchange(object):
 
         except HTTPError as e:
             details = ' '.join([self.id, method, url])
-            self.handle_errors(http_status_code, http_status_text, url, method, headers, http_response, json_response, request_headers, request_body)
-            self.handle_http_status_code(http_status_code, http_status_text, url, method, http_response)
+            skip_further_error_handling = self.handle_errors(http_status_code, http_status_text, url, method, headers, http_response, json_response, request_headers, request_body)
+            if not skip_further_error_handling:
+                self.handle_http_status_code(http_status_code, http_status_text, url, method, http_response)
             raise ExchangeError(details) from e
 
         except requestsConnectionError as e:
@@ -1432,8 +1436,35 @@ class Exchange(object):
         values = list(markets.values()) if type(markets) is dict else markets
         for i in range(0, len(values)):
             values[i] = self.extend(
+                {
+                    'id': None,
+                    'symbol': None,
+                    'base': None,
+                    'quote': None,
+                    'baseId': None,
+                    'quoteId': None,
+                    'active': None,
+                    'type': None,
+                    'linear': None,
+                    'inverse': None,
+                    'spot': False,
+                    'swap': False,
+                    'future': False,
+                    'option': False,
+                    'margin': False,
+                    'contract': False,
+                    'contractSize': None,
+                    'expiry': None,
+                    'expiryDatetime': None,
+                    'optionType': None,
+                    'strike': None,
+                    'settle': None,
+                    'settleId': None,
+                    'precision': self.precision,
+                    'limits': self.limits,
+                    'info': None,
+                },
                 self.fees['trading'],
-                {'precision': self.precision, 'limits': self.limits},
                 values[i]
             )
         self.markets = self.index_by(values, 'symbol')
@@ -1796,10 +1827,12 @@ class Exchange(object):
             trade = trades[i]
             if (since is not None) and (trade['timestamp'] < since):
                 continue
-            opening_time = int(math.floor(trade['timestamp'] / ms) * ms)  # Shift the edge of the m/h/d (but not M)
+            opening_time = None
+            if trade['timestamp']:
+                opening_time = int(math.floor(trade['timestamp'] / ms) * ms)  # Shift the edge of the m/h/d (but not M)
             j = len(ohlcvs)
             candle = j - 1
-            if (j == 0) or opening_time >= ohlcvs[candle][timestamp] + ms:
+            if (j == 0) or (opening_time and opening_time >= ohlcvs[candle][timestamp] + ms):
                 # moved to a new timeframe -> create a new candle from opening trade
                 ohlcvs.append([
                     opening_time,

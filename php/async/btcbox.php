@@ -19,6 +19,7 @@ class btcbox extends Exchange {
             'rateLimit' => 1000,
             'version' => 'v1',
             'has' => array(
+                'CORS' => null,
                 'spot' => true,
                 'margin' => false,
                 'swap' => false,
@@ -26,11 +27,11 @@ class btcbox extends Exchange {
                 'option' => false,
                 'addMargin' => false,
                 'cancelOrder' => true,
-                'CORS' => null,
                 'createOrder' => true,
                 'createReduceOnlyOrder' => false,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
+                'fetchBorrowRateHistories' => false,
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
@@ -195,10 +196,7 @@ class btcbox extends Exchange {
         //      }
         //
         $timestamp = $this->safe_timestamp($trade, 'date');
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         $id = $this->safe_string($trade, 'tid');
         $priceString = $this->safe_string($trade, 'price');
         $amountString = $this->safe_string($trade, 'amount');
@@ -210,7 +208,7 @@ class btcbox extends Exchange {
             'order' => null,
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'type' => $type,
             'side' => $side,
             'takerOrMaker' => null,
@@ -324,10 +322,7 @@ class btcbox extends Exchange {
             }
         }
         $trades = null; // todo => $this->parse_trades($order['trades']);
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $market = $this->safe_market(null, $market);
         $side = $this->safe_string($order, 'type');
         return $this->safe_order(array(
             'id' => $id,
@@ -343,7 +338,7 @@ class btcbox extends Exchange {
             'timeInForce' => null,
             'postOnly' => null,
             'status' => $status,
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'price' => $price,
             'stopPrice' => null,
             'cost' => null,

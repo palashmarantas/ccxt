@@ -12,7 +12,6 @@ from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
 from ccxt.base.errors import InvalidNonce
-from ccxt.base.precise import Precise
 
 
 class bitbank(Exchange):
@@ -24,13 +23,22 @@ class bitbank(Exchange):
             'countries': ['JP'],
             'version': 'v1',
             'has': {
+                'CORS': None,
                 'spot': True,
+                'margin': False,
                 'swap': False,
                 'future': False,
                 'option': False,
+                'addMargin': False,
                 'cancelOrder': True,
                 'createOrder': True,
+                'createReduceOnlyOrder': False,
                 'fetchBalance': True,
+                'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
+                'fetchBorrowRateHistory': False,
+                'fetchBorrowRates': False,
+                'fetchBorrowRatesPerSymbol': False,
                 'fetchDepositAddress': True,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
@@ -39,12 +47,14 @@ class bitbank(Exchange):
                 'fetchIndexOHLCV': False,
                 'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
                 'fetchOrderBook': True,
+                'fetchPosition': False,
                 'fetchPositions': False,
                 'fetchPositionsRisk': False,
                 'fetchPremiumIndexOHLCV': False,
@@ -52,6 +62,7 @@ class bitbank(Exchange):
                 'fetchTrades': True,
                 'reduceMargin': False,
                 'setLeverage': False,
+                'setMarginMode': False,
                 'setPositionMode': False,
                 'withdraw': True,
             },
@@ -169,12 +180,6 @@ class bitbank(Exchange):
             quoteId = self.safe_string(entry, 'quote_asset')
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
-            maker = self.safe_number(entry, 'maker_fee_rate_quote')
-            taker = self.safe_number(entry, 'taker_fee_rate_quote')
-            pricePrecisionString = self.safe_string(entry, 'price_digits')
-            priceLimit = self.parse_precision(pricePrecisionString)
-            minAmountString = self.safe_string(entry, 'unit_amount')
-            minCost = Precise.string_mul(minAmountString, priceLimit)
             result.append({
                 'id': id,
                 'symbol': base + '/' + quote,
@@ -194,16 +199,16 @@ class bitbank(Exchange):
                 'contract': False,
                 'linear': None,
                 'inverse': None,
-                'maker': maker,
-                'taker': taker,
+                'taker': self.safe_number(entry, 'taker_fee_rate_quote'),
+                'maker': self.safe_number(entry, 'maker_fee_rate_quote'),
                 'contractSize': None,
                 'expiry': None,
                 'expiryDatetime': None,
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': int(pricePrecisionString),
                     'amount': self.safe_integer(entry, 'amount_digits'),
+                    'price': self.safe_integer(entry, 'price_digits'),
                 },
                 'limits': {
                     'leverage': {
@@ -215,11 +220,11 @@ class bitbank(Exchange):
                         'max': self.safe_number(entry, 'limit_max_amount'),
                     },
                     'price': {
-                        'min': self.parse_number(priceLimit),
+                        'min': None,
                         'max': None,
                     },
                     'cost': {
-                        'min': self.parse_number(minCost),
+                        'min': None,
                         'max': None,
                     },
                 },
@@ -276,11 +281,7 @@ class bitbank(Exchange):
 
     def parse_trade(self, trade, market=None):
         timestamp = self.safe_integer(trade, 'executed_at')
-        symbol = None
-        feeCurrency = None
-        if market is not None:
-            symbol = market['symbol']
-            feeCurrency = market['quote']
+        market = self.safe_market(None, market)
         priceString = self.safe_string(trade, 'price')
         amountString = self.safe_string(trade, 'amount')
         id = self.safe_string_2(trade, 'transaction_id', 'trade_id')
@@ -289,7 +290,7 @@ class bitbank(Exchange):
         feeCostString = self.safe_string(trade, 'fee_amount_quote')
         if feeCostString is not None:
             fee = {
-                'currency': feeCurrency,
+                'currency': market['quote'],
                 'cost': feeCostString,
             }
         orderId = self.safe_string(trade, 'order_id')
@@ -298,7 +299,7 @@ class bitbank(Exchange):
         return self.safe_trade({
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'id': id,
             'order': orderId,
             'type': type,
@@ -447,11 +448,7 @@ class bitbank(Exchange):
     def parse_order(self, order, market=None):
         id = self.safe_string(order, 'order_id')
         marketId = self.safe_string(order, 'pair')
-        symbol = None
-        if marketId and not market and (marketId in self.markets_by_id):
-            market = self.markets_by_id[marketId]
-        if market is not None:
-            symbol = market['symbol']
+        market = self.safe_market(marketId, market)
         timestamp = self.safe_integer(order, 'ordered_at')
         price = self.safe_string(order, 'price')
         amount = self.safe_string(order, 'start_amount')
@@ -468,7 +465,7 @@ class bitbank(Exchange):
             'timestamp': timestamp,
             'lastTradeTimestamp': None,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
             'timeInForce': None,
             'postOnly': None,
@@ -539,12 +536,11 @@ class bitbank(Exchange):
 
     async def fetch_my_trades(self, symbol=None, since=None, limit=None, params={}):
         await self.load_markets()
+        request = {}
         market = None
         if symbol is not None:
-            market = self.market(symbol)
-        request = {}
-        if market is not None:
             request['pair'] = market['id']
+            market = self.market(symbol)
         if limit is not None:
             request['count'] = limit
         if since is not None:

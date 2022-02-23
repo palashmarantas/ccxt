@@ -30,6 +30,7 @@ class vcc(Exchange):
             'rateLimit': 1000,
             'version': 'v3',
             'has': {
+                'CORS': None,
                 'spot': True,
                 'margin': False,
                 'swap': False,
@@ -43,6 +44,7 @@ class vcc(Exchange):
                 'editOrder': None,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
+                'fetchBorrowRateHistories': False,
                 'fetchBorrowRateHistory': False,
                 'fetchBorrowRates': False,
                 'fetchBorrowRatesPerSymbol': False,
@@ -57,6 +59,7 @@ class vcc(Exchange):
                 'fetchIndexOHLCV': False,
                 'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
+                'fetchLeverageTiers': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
                 'fetchMyTrades': True,
@@ -244,8 +247,8 @@ class vcc(Exchange):
                 'strike': None,
                 'optionType': None,
                 'precision': {
-                    'price': self.safe_integer(precision, 'price'),
                     'amount': self.safe_integer(precision, 'amount'),
+                    'price': self.safe_integer(precision, 'price'),
                     'cost': self.safe_integer(precision, 'cost'),
                 },
                 'limits': {

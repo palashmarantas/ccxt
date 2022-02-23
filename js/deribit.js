@@ -20,19 +20,29 @@ module.exports = class deribit extends Exchange {
             // 5 requests per second for matching-engine endpoints, cost = (1000ms / rateLimit) / 5 = 4
             'rateLimit': 50,
             'has': {
-                'fetchPosition': true,
+                'CORS': true,
+                'spot': false,
+                'margin': false,
+                'swap': undefined,
+                'future': undefined,
+                'option': undefined,
                 'cancelAllOrders': true,
                 'cancelOrder': true,
-                'CORS': true,
                 'createDepositAddress': true,
                 'createOrder': true,
                 'editOrder': true,
                 'fetchBalance': true,
+                'fetchBorrowRate': false,
+                'fetchBorrowRateHistories': false,
+                'fetchBorrowRateHistory': false,
+                'fetchBorrowRates': false,
+                'fetchBorrowRatesPerSymbol': false,
                 'fetchClosedOrders': true,
                 'fetchDepositAddress': true,
                 'fetchDeposits': true,
                 'fetchHistoricalVolatility': true,
                 'fetchIndexOHLCV': false,
+                'fetchLeverageTiers': false,
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
@@ -42,6 +52,7 @@ module.exports = class deribit extends Exchange {
                 'fetchOrderBook': true,
                 'fetchOrders': undefined,
                 'fetchOrderTrades': true,
+                'fetchPosition': true,
                 'fetchPositions': true,
                 'fetchPremiumIndexOHLCV': false,
                 'fetchStatus': true,
@@ -484,7 +495,8 @@ module.exports = class deribit extends Exchange {
                         type = 'option';
                         strike = this.safeNumber (market, 'strike');
                         optionType = this.safeString (market, 'option_type');
-                        symbol = symbol + ':' + this.numberToString (strike) + ':' + optionType;
+                        const letter = (optionType === 'call') ? 'C' : 'P';
+                        symbol = symbol + ':' + this.numberToString (strike) + ':' + letter;
                     } else {
                         type = 'future';
                     }
@@ -506,13 +518,13 @@ module.exports = class deribit extends Exchange {
                     'swap': swap,
                     'future': future,
                     'option': option,
+                    'active': this.safeValue (market, 'is_active'),
                     'contract': true,
                     'linear': false,
                     'inverse': true,
                     'taker': this.safeNumber (market, 'taker_commission'),
                     'maker': this.safeNumber (market, 'maker_commission'),
                     'contractSize': this.safeNumber (market, 'contract_size'),
-                    'active': this.safeValue (market, 'is_active'),
                     'expiry': expiry,
                     'expiryDatetime': this.iso8601 (expiry),
                     'strike': strike,
