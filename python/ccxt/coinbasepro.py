@@ -4,13 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 import hashlib
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -48,7 +41,9 @@ class coinbasepro(Exchange):
                 'cancelOrder': True,
                 'createDepositAddress': True,
                 'createOrder': True,
-                'deposit': True,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchAccounts': True,
                 'fetchBalance': True,
                 'fetchClosedOrders': True,
@@ -68,6 +63,8 @@ class coinbasepro(Exchange):
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
                 'fetchTransactions': True,
                 'fetchWithdrawals': True,
                 'withdraw': True,
@@ -185,8 +182,8 @@ class coinbasepro(Exchange):
                 'trading': {
                     'tierBased': True,  # complicated tier system per coin
                     'percentage': True,
-                    'maker': 0.5 / 100,  # highest fee of all tiers
-                    'taker': 0.5 / 100,  # highest fee of all tiers
+                    'maker': 0.4 / 100,  # highest fee of all tiers
+                    'taker': 0.6 / 100,  # highest fee of all tiers
                 },
                 'funding': {
                     'tierBased': False,
@@ -708,6 +705,31 @@ class coinbasepro(Exchange):
         response = self.publicGetProductsIdTrades(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
 
+    def fetch_trading_fees(self, params={}):
+        self.load_markets()
+        response = self.privateGetFees(params)
+        #
+        #    {
+        #        "maker_fee_rate": "0.0050",
+        #        "taker_fee_rate": "0.0050",
+        #        "usd_volume": "43806.92"
+        #    }
+        #
+        maker = self.safe_number(response, 'maker_fee_rate')
+        taker = self.safe_number(response, 'taker_fee_rate')
+        result = {}
+        for i in range(0, len(self.symbols)):
+            symbol = self.symbols[i]
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': True,
+                'tierBased': True,
+            }
+        return result
+
     def parse_ohlcv(self, ohlcv, market=None):
         #
         #     [
@@ -1002,6 +1024,14 @@ class coinbasepro(Exchange):
         return self.privateGetPaymentMethods(params)
 
     def deposit(self, code, amount, address, params={}):
+        """
+        Creates a new deposit address, as required by coinbasepro
+        :param str code: Unified CCXT currency code(e.g. `"USDT"`)
+        :param float amount: The amount of currency to send in the deposit(e.g. `20`)
+        :param str address: Not used by coinbasepro
+        :param dict params: Parameters specific to the exchange API endpoint(e.g. `{"network": "TRX"}`)
+        :returns: a `transaction structure <https://docs.ccxt.com/en/latest/manual.html#transaction-structure>`
+        """
         self.load_markets()
         currency = self.currency(code)
         request = {
@@ -1050,10 +1080,7 @@ class coinbasepro(Exchange):
         response = getattr(self, method)(self.extend(request, params))
         if not response:
             raise ExchangeError(self.id + ' withdraw() error: ' + self.json(response))
-        return {
-            'info': response,
-            'id': response['id'],
-        }
+        return self.parse_transaction(response, currency)
 
     def parse_ledger_entry_type(self, type):
         types = {
@@ -1331,7 +1358,7 @@ class coinbasepro(Exchange):
 
     def request(self, path, api='public', method='GET', params={}, headers=None, body=None, config={}, context={}):
         response = self.fetch2(path, api, method, params, headers, body, config, context)
-        if not isinstance(response, basestring):
+        if not isinstance(response, str):
             if 'message' in response:
                 raise ExchangeError(self.id + ' ' + self.json(response))
         return response

@@ -40,7 +40,6 @@ class lbank extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
@@ -57,6 +56,8 @@ class lbank extends Exchange {
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
@@ -82,7 +83,7 @@ class lbank extends Exchange {
                 'api' => 'https://api.lbank.info',
                 'www' => 'https://www.lbank.info',
                 'doc' => 'https://github.com/LBank-exchange/lbank-official-api-docs',
-                'fees' => 'https://lbankinfo.zendesk.com/hc/en-gb/articles/360012072873-Trading-Fees',
+                'fees' => 'https://www.lbank.info/fees.html',
                 'referral' => 'https://www.lbex.io/invite?icode=7QCY',
             ),
             'api' => array(
@@ -120,8 +121,9 @@ class lbank extends Exchange {
                 ),
             ),
             'commonCurrencies' => array(
-                'VET_ERC20' => 'VEN',
+                'GMT' => 'GMT Token',
                 'PNT' => 'Penta',
+                'VET_ERC20' => 'VEN',
             ),
             'options' => array(
                 'cacheSecretAsPem' => true,
@@ -194,7 +196,7 @@ class lbank extends Exchange {
                         'max' => null,
                     ),
                     'amount' => array(
-                        'min' => null,
+                        'min' => $this->safe_float($market, 'minTranQua'),
                         'max' => null,
                     ),
                     'price' => array(
@@ -587,6 +589,11 @@ class lbank extends Exchange {
     }
 
     public function fetch_closed_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
+        yield $this->load_markets();
+        if ($symbol !== null) {
+            $market = $this->market($symbol);
+            $symbol = $market['symbol'];
+        }
         $orders = yield $this->fetch_orders($symbol, $since, $limit, $params);
         $closed = $this->filter_by($orders, 'status', 'closed');
         $canceled = $this->filter_by($orders, 'status', 'cancelled'); // cancelled $orders may be partially filled
@@ -609,9 +616,47 @@ class lbank extends Exchange {
             $request['memo'] = $tag;
         }
         $response = $this->privatePostWithdraw (array_merge($request, $params));
+        //
+        //     {
+        //         'result' => 'true',
+        //         'withdrawId' => 90082,
+        //         'fee':0.001
+        //     }
+        //
+        return $this->parse_transaction($response, $currency);
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        // withdraw
+        //
+        //     {
+        //         'result' => 'true',
+        //         'withdrawId' => 90082,
+        //         'fee':0.001
+        //     }
+        //
+        $currency = $this->safe_currency(null, $currency);
         return array(
-            'id' => $this->safe_string($response, 'id'),
-            'info' => $response,
+            'id' => $this->safe_string_2($transaction, 'id', 'withdrawId'),
+            'txid' => null,
+            'timestamp' => null,
+            'datetime' => null,
+            'network' => null,
+            'addressFrom' => null,
+            'address' => null,
+            'addressTo' => null,
+            'amount' => null,
+            'type' => null,
+            'currency' => $currency['code'],
+            'status' => null,
+            'updated' => null,
+            'tagFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'comment' => null,
+            'fee' => null,
+            'info' => $transaction,
         );
     }
 

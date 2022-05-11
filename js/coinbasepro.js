@@ -29,7 +29,9 @@ module.exports = class coinbasepro extends Exchange {
                 'cancelOrder': true,
                 'createDepositAddress': true,
                 'createOrder': true,
-                'deposit': true,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'fetchAccounts': true,
                 'fetchBalance': true,
                 'fetchClosedOrders': true,
@@ -49,6 +51,8 @@ module.exports = class coinbasepro extends Exchange {
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': true,
                 'fetchTransactions': true,
                 'fetchWithdrawals': true,
                 'withdraw': true,
@@ -166,8 +170,8 @@ module.exports = class coinbasepro extends Exchange {
                 'trading': {
                     'tierBased': true, // complicated tier system per coin
                     'percentage': true,
-                    'maker': 0.5 / 100, // highest fee of all tiers
-                    'taker': 0.5 / 100, // highest fee of all tiers
+                    'maker': 0.4 / 100, // highest fee of all tiers
+                    'taker': 0.6 / 100, // highest fee of all tiers
                 },
                 'funding': {
                     'tierBased': false,
@@ -714,6 +718,33 @@ module.exports = class coinbasepro extends Exchange {
         return this.parseTrades (response, market, since, limit);
     }
 
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const response = await this.privateGetFees (params);
+        //
+        //    {
+        //        "maker_fee_rate": "0.0050",
+        //        "taker_fee_rate": "0.0050",
+        //        "usd_volume": "43806.92"
+        //    }
+        //
+        const maker = this.safeNumber (response, 'maker_fee_rate');
+        const taker = this.safeNumber (response, 'taker_fee_rate');
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': true,
+                'tierBased': true,
+            };
+        }
+        return result;
+    }
+
     parseOHLCV (ohlcv, market = undefined) {
         //
         //     [
@@ -1041,6 +1072,16 @@ module.exports = class coinbasepro extends Exchange {
     }
 
     async deposit (code, amount, address, params = {}) {
+        /**
+         * @method
+         * @name coinbasepro#deposit
+         * @description Creates a new deposit address, as required by coinbasepro
+         * @param {str} code Unified CCXT currency code (e.g. `"USDT"`)
+         * @param {float} amount The amount of currency to send in the deposit (e.g. `20`)
+         * @param {str} address Not used by coinbasepro
+         * @param {dict} params Parameters specific to the exchange API endpoint (e.g. `{"network": "TRX"}`)
+         * @returns a [transaction structure]{@link https://docs.ccxt.com/en/latest/manual.html#transaction-structure}
+         */
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = {
@@ -1095,10 +1136,7 @@ module.exports = class coinbasepro extends Exchange {
         if (!response) {
             throw new ExchangeError (this.id + ' withdraw() error: ' + this.json (response));
         }
-        return {
-            'info': response,
-            'id': response['id'],
-        };
+        return this.parseTransaction (response, currency);
     }
 
     parseLedgerEntryType (type) {

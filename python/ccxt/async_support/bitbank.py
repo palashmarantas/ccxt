@@ -45,7 +45,6 @@ class bitbank(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
                 'fetchLeverageTiers': False,
                 'fetchMarkOHLCV': False,
@@ -60,10 +59,15 @@ class bitbank(Exchange):
                 'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
                 'setPositionMode': False,
+                'transfer': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -323,6 +327,55 @@ class bitbank(Exchange):
         trades = self.safe_value(data, 'transactions', [])
         return self.parse_trades(trades, market, since, limit)
 
+    async def fetch_trading_fees(self, params={}):
+        await self.load_markets()
+        response = await self.marketsGetSpotPairs(params)
+        #
+        #     {
+        #         success: '1',
+        #         data: {
+        #           pairs: [
+        #             {
+        #               name: 'btc_jpy',
+        #               base_asset: 'btc',
+        #               quote_asset: 'jpy',
+        #               maker_fee_rate_base: '0',
+        #               taker_fee_rate_base: '0',
+        #               maker_fee_rate_quote: '-0.0002',
+        #               taker_fee_rate_quote: '0.0012',
+        #               unit_amount: '0.0001',
+        #               limit_max_amount: '1000',
+        #               market_max_amount: '10',
+        #               market_allowance_rate: '0.2',
+        #               price_digits: '0',
+        #               amount_digits: '4',
+        #               is_enabled: True,
+        #               stop_order: False,
+        #               stop_order_and_cancel: False
+        #             },
+        #             ...
+        #           ]
+        #         }
+        #     }
+        #
+        data = self.safe_value(response, 'data', {})
+        pairs = self.safe_value(data, 'pairs', [])
+        result = {}
+        for i in range(0, len(pairs)):
+            pair = pairs[i]
+            marketId = self.safe_string(pair, 'name')
+            market = self.safe_market(marketId)
+            symbol = market['symbol']
+            result[symbol] = {
+                'info': pair,
+                'symbol': symbol,
+                'maker': self.safe_number(pair, 'maker_fee_rate_quote'),
+                'taker': self.safe_number(pair, 'taker_fee_rate_quote'),
+                'percentage': True,
+                'tierBased': False,
+            }
+        return result
+
     def parse_ohlcv(self, ohlcv, market=None):
         #
         #     [
@@ -345,7 +398,7 @@ class bitbank(Exchange):
 
     async def fetch_ohlcv(self, symbol, timeframe='5m', since=None, limit=None, params={}):
         if since is None:
-            raise ArgumentsRequired(self.id + ' fetchOHLCV requires a since argument')
+            raise ArgumentsRequired(self.id + ' fetchOHLCV() requires a since argument')
         await self.load_markets()
         market = self.market(symbol)
         request = {
@@ -581,11 +634,65 @@ class bitbank(Exchange):
             'amount': amount,
         }
         response = await self.privatePostUserRequestWithdrawal(self.extend(request, params))
+        #
+        #     {
+        #         "success": 1,
+        #         "data": {
+        #             "uuid": "string",
+        #             "asset": "btc",
+        #             "amount": 0,
+        #             "account_uuid": "string",
+        #             "fee": 0,
+        #             "status": "DONE",
+        #             "label": "string",
+        #             "txid": "string",
+        #             "address": "string",
+        #             "requested_at": 0
+        #         }
+        #     }
+        #
         data = self.safe_value(response, 'data', {})
-        txid = self.safe_string(data, 'txid')
+        return self.parse_transaction(data, currency)
+
+    def parse_transaction(self, transaction, currency=None):
+        #
+        # withdraw
+        #
+        #     {
+        #         "uuid": "string",
+        #         "asset": "btc",
+        #         "amount": 0,
+        #         "account_uuid": "string",
+        #         "fee": 0,
+        #         "status": "DONE",
+        #         "label": "string",
+        #         "txid": "string",
+        #         "address": "string",
+        #         "requested_at": 0
+        #     }
+        #
+        txid = self.safe_string(transaction, 'txid')
+        currency = self.safe_currency(None, currency)
         return {
-            'info': response,
             'id': txid,
+            'txid': txid,
+            'timestamp': None,
+            'datetime': None,
+            'network': None,
+            'addressFrom': None,
+            'address': None,
+            'addressTo': None,
+            'amount': None,
+            'type': None,
+            'currency': currency['code'],
+            'status': None,
+            'updated': None,
+            'tagFrom': None,
+            'tag': None,
+            'tagTo': None,
+            'comment': None,
+            'fee': None,
+            'info': transaction,
         }
 
     def nonce(self):

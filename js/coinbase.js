@@ -32,7 +32,9 @@ module.exports = class coinbase extends Exchange {
                 'createDepositAddress': true,
                 'createOrder': undefined,
                 'createReduceOnlyOrder': false,
-                'deposit': undefined,
+                'createStopLimitOrder': false,
+                'createStopMarketOrder': false,
+                'createStopOrder': false,
                 'fetchAccounts': true,
                 'fetchBalance': true,
                 'fetchBidsAsks': undefined,
@@ -50,7 +52,6 @@ module.exports = class coinbase extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchL2OrderBook': false,
                 'fetchLedger': true,
                 'fetchLeverage': false,
@@ -73,6 +74,8 @@ module.exports = class coinbase extends Exchange {
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': undefined,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'fetchTransactions': undefined,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
@@ -275,7 +278,7 @@ module.exports = class coinbase extends Exchange {
             }
         }
         if (accountId === undefined) {
-            throw new ExchangeError (this.id + ' createDepositAddress could not find the account with matching currency code, specify an `account_id` extra param');
+            throw new ExchangeError (this.id + ' createDepositAddress() could not find the account with matching currency code, specify an `account_id` extra param');
         }
         const request = {
             'account_id': accountId,
@@ -1218,7 +1221,7 @@ module.exports = class coinbase extends Exchange {
     prepareAccountRequest (limit = undefined, params = {}) {
         const accountId = this.safeString2 (params, 'account_id', 'accountId');
         if (accountId === undefined) {
-            throw new ArgumentsRequired (this.id + ' method requires an account_id (or accountId) parameter');
+            throw new ArgumentsRequired (this.id + ' prepareAccountRequest() method requires an account_id (or accountId) parameter');
         }
         const request = {
             'account_id': accountId,
@@ -1233,11 +1236,11 @@ module.exports = class coinbase extends Exchange {
         let accountId = this.safeString2 (params, 'account_id', 'accountId');
         if (accountId === undefined) {
             if (code === undefined) {
-                throw new ArgumentsRequired (this.id + ' method requires an account_id (or accountId) parameter OR a currency code argument');
+                throw new ArgumentsRequired (this.id + ' prepareAccountRequestWithCurrencyCode() method requires an account_id (or accountId) parameter OR a currency code argument');
             }
             accountId = await this.findAccountId (code);
             if (accountId === undefined) {
-                throw new ExchangeError (this.id + ' could not find account id for ' + code);
+                throw new ExchangeError (this.id + ' prepareAccountRequestWithCurrencyCode() could not find account id for ' + code);
             }
         }
         const request = {

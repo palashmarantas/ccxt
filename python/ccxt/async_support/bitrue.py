@@ -46,6 +46,9 @@ class bitrue(Exchange):
                 'cancelAllOrders': False,
                 'cancelOrder': True,
                 'createOrder': True,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'fetchBalance': True,
                 'fetchBidsAsks': True,
                 'fetchBorrowRate': False,
@@ -253,6 +256,9 @@ class bitrue(Exchange):
                     'ADA': 'Cardano',
                 },
             },
+            'commonCurrencies': {
+                'MIM': 'MIM Swarm',
+            },
             # https://binance-docs.github.io/apidocs/spot/en/#error-codes-2
             'exceptions': {
                 'exact': {
@@ -330,10 +336,10 @@ class bitrue(Exchange):
     def cost_to_precision(self, symbol, cost):
         return self.decimal_to_precision(cost, TRUNCATE, self.markets[symbol]['precision']['quote'], self.precisionMode, self.paddingMode)
 
-    def currency_to_precision(self, currency, fee):
+    def currency_to_precision(self, code, fee):
         # info is available in currencies only if the user has configured his api keys
-        if self.safe_value(self.currencies[currency], 'precision') is not None:
-            return self.decimal_to_precision(fee, TRUNCATE, self.currencies[currency]['precision'], self.precisionMode, self.paddingMode)
+        if self.safe_value(self.currencies[code], 'precision') is not None:
+            return self.decimal_to_precision(fee, TRUNCATE, self.currencies[code]['precision'], self.precisionMode, self.paddingMode)
         else:
             return self.number_to_string(fee)
 
@@ -342,14 +348,21 @@ class bitrue(Exchange):
 
     async def fetch_status(self, params={}):
         response = await self.v1PublicGetPing(params)
+        #
+        # empty means working status.
+        #
+        #     {}
+        #
         keys = list(response.keys())
         keysLength = len(keys)
         formattedStatus = 'maintenance' if keysLength else 'ok'
-        self.status = self.extend(self.status, {
+        return {
             'status': formattedStatus,
             'updated': self.milliseconds(),
-        })
-        return self.status
+            'eta': None,
+            'url': None,
+            'info': response,
+        }
 
     async def fetch_time(self, params={}):
         response = await self.v1PublicGetTime(params)
@@ -1187,7 +1200,7 @@ class bitrue(Exchange):
 
     async def fetch_open_orders(self, symbol=None, since=None, limit=None, params={}):
         if symbol is None:
-            raise ArgumentsRequired(self.id + ' fetchOpenOrders requires a symbol argument')
+            raise ArgumentsRequired(self.id + ' fetchOpenOrders() requires a symbol argument')
         await self.load_markets()
         market = self.market(symbol)
         request = {
@@ -1289,7 +1302,7 @@ class bitrue(Exchange):
 
     async def fetch_deposits(self, code=None, since=None, limit=None, params={}):
         if code is None:
-            raise ArgumentsRequired(self.id + ' fetchDeposits requires a code argument')
+            raise ArgumentsRequired(self.id + ' fetchDeposits() requires a code argument')
         await self.load_markets()
         currency = self.currency(code)
         request = {
@@ -1347,7 +1360,7 @@ class bitrue(Exchange):
 
     async def fetch_withdrawals(self, code=None, since=None, limit=None, params={}):
         if code is None:
-            raise ArgumentsRequired(self.id + ' fetchWithdrawals requires a code argument')
+            raise ArgumentsRequired(self.id + ' fetchWithdrawals() requires a code argument')
         await self.load_markets()
         currency = self.currency(code)
         request = {
@@ -1379,7 +1392,7 @@ class bitrue(Exchange):
         #     }
         #
         data = self.safe_value(response, 'data', {})
-        return self.parse_transaction(data, currency)
+        return self.parse_transactions(data, currency)
 
     def parse_transaction_status_by_type(self, status, type=None):
         statusesByType = {
@@ -1532,7 +1545,7 @@ class bitrue(Exchange):
             networkEntry = self.safe_value(networks, network, {})
             chainName = self.safe_string(networkEntry, 'id')  # handle ERC20>ETH alias
             if chainName is None:
-                raise ArgumentsRequired(self.id + ' withdraw requires a network parameter or a chainName parameter')
+                raise ArgumentsRequired(self.id + ' withdraw() requires a network parameter or a chainName parameter')
             params = self.omit(params, 'network')
         request = {
             'coin': currency['id'].upper(),
@@ -1547,10 +1560,7 @@ class bitrue(Exchange):
             request['tag'] = tag
         response = await self.v1PrivatePostWithdrawCommit(self.extend(request, params))
         #     {id: '9a67628b16ba4988ae20d329333f16bc'}
-        return {
-            'info': response,
-            'id': self.safe_string(response, 'id'),
-        }
+        return self.parse_transaction(response, currency)
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
         version, access = api

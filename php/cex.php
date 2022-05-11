@@ -33,7 +33,9 @@ class cex extends Exchange {
                 'fetchBalance' => true,
                 'fetchClosedOrders' => true,
                 'fetchCurrencies' => true,
+                'fetchDeposit' => false,
                 'fetchDepositAddress' => true,
+                'fetchDeposits' => false,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
@@ -50,6 +52,14 @@ class cex extends Exchange {
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => true,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
+                'fetchWithdrawal' => false,
+                'fetchWithdrawals' => false,
+                'transfer' => false,
+                'withdraw' => false,
             ),
             'timeframes' => array(
                 '1m' => '1m',
@@ -146,6 +156,7 @@ class cex extends Exchange {
                     'Invalid API key' => '\\ccxt\\AuthenticationError',
                     'There was an error while placing your order' => '\\ccxt\\InvalidOrder',
                     'Sorry, too many clients already' => '\\ccxt\\DDoSProtection',
+                    'Invalid Symbols Pair' => '\\ccxt\\BadSymbol',
                 ),
             ),
             'options' => array(
@@ -519,12 +530,13 @@ class cex extends Exchange {
             'currencies' => implode('/', $currencies),
         );
         $response = $this->publicGetTickersCurrencies (array_merge($request, $params));
-        $tickers = $response['data'];
+        $tickers = $this->safe_value($response, 'data', array());
         $result = array();
         for ($t = 0; $t < count($tickers); $t++) {
             $ticker = $tickers[$t];
-            $symbol = str_replace(':', '/', $ticker['pair']);
-            $market = $this->markets[$symbol];
+            $marketId = $this->safe_string($ticker, 'pair');
+            $market = $this->safe_market($marketId, null, ':');
+            $symbol = $market['symbol'];
             $result[$symbol] = $this->parse_ticker($ticker, $market);
         }
         return $this->filter_by_array($result, 'symbol', $symbols);
@@ -584,6 +596,41 @@ class cex extends Exchange {
         );
         $response = $this->publicGetTradeHistoryPair (array_merge($request, $params));
         return $this->parse_trades($response, $market, $since, $limit);
+    }
+
+    public function fetch_trading_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->privatePostGetMyfee ($params);
+        //
+        //      {
+        //          e => 'get_myfee',
+        //          ok => 'ok',
+        //          $data => {
+        //            'BTC:USD' => array( buy => '0.25', sell => '0.25', buyMaker => '0.15', sellMaker => '0.15' ),
+        //            'ETH:USD' => array( buy => '0.25', sell => '0.25', buyMaker => '0.15', sellMaker => '0.15' ),
+        //            ..
+        //          }
+        //      }
+        //
+        $data = $this->safe_value($response, 'data', array());
+        $result = array();
+        for ($i = 0; $i < count($this->symbols); $i++) {
+            $symbol = $this->symbols[$i];
+            $market = $this->market($symbol);
+            $fee = $this->safe_value($data, $market['id'], array());
+            $makerString = $this->safe_string($fee, 'buyMaker');
+            $takerString = $this->safe_string($fee, 'buy');
+            $maker = $this->parse_number(Precise::string_div($makerString, '100'));
+            $taker = $this->parse_number(Precise::string_div($takerString, '100'));
+            $result[$symbol] = array(
+                'info' => $fee,
+                'symbol' => $symbol,
+                'maker' => $maker,
+                'taker' => $taker,
+                'percentage' => true,
+            );
+        }
+        return $result;
     }
 
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
@@ -1293,7 +1340,7 @@ class cex extends Exchange {
     public function fetch_deposit_address($code, $params = array ()) {
         if ($code === 'XRP' || $code === 'XLM') {
             // https://github.com/ccxt/ccxt/pull/2327#issuecomment-375204856
-            throw new NotSupported($this->id . ' fetchDepositAddress does not support XRP and XLM addresses yet (awaiting docs from CEX.io)');
+            throw new NotSupported($this->id . ' fetchDepositAddress() does not support XRP and XLM addresses yet (awaiting docs from CEX.io)');
         }
         $this->load_markets();
         $currency = $this->currency($code);

@@ -41,7 +41,6 @@ class mercado extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
@@ -59,6 +58,8 @@ class mercado extends Exchange {
                 'fetchTicker' => true,
                 'fetchTickers' => null,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
@@ -411,7 +412,7 @@ class mercado extends Exchange {
 
     public function cancel_order($id, $symbol = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' cancelOrder () requires a $symbol argument');
+            throw new ArgumentsRequired($this->id . ' cancelOrder() requires a $symbol argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -531,7 +532,7 @@ class mercado extends Exchange {
 
     public function fetch_order($id, $symbol = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' fetchOrder () requires a $symbol argument');
+            throw new ArgumentsRequired($this->id . ' fetchOrder() requires a $symbol argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -576,9 +577,65 @@ class mercado extends Exchange {
             }
         }
         $response = $this->privatePostWithdrawCoin (array_merge($request, $params));
+        //
+        //     {
+        //         "response_data" => {
+        //             "withdrawal" => array(
+        //                 "id" => 1,
+        //                 "coin" => "BRL",
+        //                 "quantity" => "300.56",
+        //                 "net_quantity" => "291.68",
+        //                 "fee" => "8.88",
+        //                 "account" => "bco => 341, ag => 1111, cta => 23456-X",
+        //                 "status" => 1,
+        //                 "created_timestamp" => "1453912088",
+        //                 "updated_timestamp" => "1453912088"
+        //             }
+        //         ),
+        //         "status_code" => 100,
+        //         "server_unix_timestamp" => "1453912088"
+        //     }
+        //
+        $responseData = $this->safe_value($response, 'response_data', array());
+        $withdrawal = $this->safe_value($responseData, 'withdrawal');
+        return $this->parse_transaction($withdrawal, $currency);
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        //     {
+        //         "id" => 1,
+        //         "coin" => "BRL",
+        //         "quantity" => "300.56",
+        //         "net_quantity" => "291.68",
+        //         "fee" => "8.88",
+        //         "account" => "bco => 341, ag => 1111, cta => 23456-X",
+        //         "status" => 1,
+        //         "created_timestamp" => "1453912088",
+        //         "updated_timestamp" => "1453912088"
+        //     }
+        //
+        $currency = $this->safe_currency(null, $currency);
         return array(
-            'info' => $response,
-            'id' => $response['response_data']['withdrawal']['id'],
+            'id' => $this->safe_string($transaction, 'id'),
+            'txid' => null,
+            'timestamp' => null,
+            'datetime' => null,
+            'network' => null,
+            'addressFrom' => null,
+            'address' => null,
+            'addressTo' => null,
+            'amount' => null,
+            'type' => null,
+            'currency' => $currency['code'],
+            'status' => null,
+            'updated' => null,
+            'tagFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'comment' => null,
+            'fee' => null,
+            'info' => $transaction,
         );
     }
 
@@ -617,7 +674,7 @@ class mercado extends Exchange {
 
     public function fetch_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' fetchOrders () requires a $symbol argument');
+            throw new ArgumentsRequired($this->id . ' fetchOrders() requires a $symbol argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -632,7 +689,7 @@ class mercado extends Exchange {
 
     public function fetch_open_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' fetchOpenOrders () requires a $symbol argument');
+            throw new ArgumentsRequired($this->id . ' fetchOpenOrders() requires a $symbol argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -648,7 +705,7 @@ class mercado extends Exchange {
 
     public function fetch_my_trades($symbol = null, $since = null, $limit = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' fetchMyTrades () requires a $symbol argument');
+            throw new ArgumentsRequired($this->id . ' fetchMyTrades() requires a $symbol argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -661,7 +718,7 @@ class mercado extends Exchange {
         $ordersRaw = $this->safe_value($responseData, 'orders', array());
         $orders = $this->parse_orders($ordersRaw, $market, $since, $limit);
         $trades = $this->orders_to_trades($orders);
-        return $this->filter_by_symbol_since_limit($trades, $symbol, $since, $limit);
+        return $this->filter_by_symbol_since_limit($trades, $market['symbol'], $since, $limit);
     }
 
     public function orders_to_trades($orders) {

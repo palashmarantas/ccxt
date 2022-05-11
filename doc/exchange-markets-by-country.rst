@@ -343,6 +343,17 @@ The ccxt library currently supports the following cryptocurrency exchange market
           :alt: API Version 1
      
    * - China
+     - .. image:: https://user-images.githubusercontent.com/1294454/38063602-9605e28a-3302-11e8-81be-64b1e53c4cfb.jpg
+          :target: https://www.lbex.io/invite?icode=7QCY
+          :alt: lbank2
+     
+     - lbank2
+     - `LBank <https://www.lbex.io/invite?icode=7QCY>`__
+     - .. image:: https://img.shields.io/badge/2-lightgray
+          :target: https://github.com/LBank-exchange/lbank-official-api-docs
+          :alt: API Version 2
+     
+   * - China
      - .. image:: https://user-images.githubusercontent.com/1294454/45798859-1a872600-bcb4-11e8-8746-69291ce87b04.jpg
           :target: https://www.liquid.com/sign-up/?affiliate=SbzC62lt30976
           :alt: liquid
@@ -497,7 +508,7 @@ The ccxt library currently supports the following cryptocurrency exchange market
           :alt: API Version 2
      
    * - Estonia
-     - .. image:: https://user-images.githubusercontent.com/1294454/27766132-978a7bd8-5ece-11e7-9540-bc96d1e9bbb8.jpg
+     - .. image:: https://user-images.githubusercontent.com/1294454/159202310-a0e38007-5e7c-4ba9-a32f-c8263a0291fe.jpg
           :target: https://auth.zondaglobal.com/ref/jHlbB4mIkdS1
           :alt: zonda
      
@@ -548,7 +559,7 @@ The ccxt library currently supports the following cryptocurrency exchange market
      - hitbtc
      - `HitBTC <https://hitbtc.com/?ref_id=5a5d39a65d466>`__
      - .. image:: https://img.shields.io/badge/2-lightgray
-          :target: https://api.hitbtc.com
+          :target: https://api.hitbtc.com/v2
           :alt: API Version 2
      
    * - Hong Kong
@@ -937,7 +948,7 @@ The ccxt library currently supports the following cryptocurrency exchange market
           :alt: API Version 3
      
    * - Saint Kitts and Nevis
-     - .. image:: https://user-images.githubusercontent.com/1294454/97296144-514fa300-1861-11eb-952b-3d55d492200b.jpg
+     - .. image:: https://user-images.githubusercontent.com/1294454/159177712-b685b40c-5269-4cea-ac83-f7894c49525d.jpg
           :target: https://fmfw.io/referral/da948b21d6c92d69
           :alt: bitcoincom
      
@@ -948,7 +959,7 @@ The ccxt library currently supports the following cryptocurrency exchange market
           :alt: API Version 2
      
    * - Saint Kitts and Nevis
-     - .. image:: https://user-images.githubusercontent.com/1294454/97296144-514fa300-1861-11eb-952b-3d55d492200b.jpg
+     - .. image:: https://user-images.githubusercontent.com/1294454/159177712-b685b40c-5269-4cea-ac83-f7894c49525d.jpg
           :target: https://fmfw.io/referral/da948b21d6c92d69
           :alt: fmfwio
      
@@ -1021,7 +1032,7 @@ The ccxt library currently supports the following cryptocurrency exchange market
      - ascendex
      - `AscendEX <https://ascendex.com/en-us/register?inviteCode=EL6BXBQM>`__
      - .. image:: https://img.shields.io/badge/2-lightgray
-          :target: https://bitmax-exchange.github.io/bitmax-pro-api/#bitmax-pro-api-documentation
+          :target: https://ascendex.github.io/ascendex-pro-api/#ascendex-pro-api-documentation
           :alt: API Version 2
      
    * - Singapore
@@ -1031,9 +1042,9 @@ The ccxt library currently supports the following cryptocurrency exchange market
      
      - bitget
      - `Bitget <https://www.bitget.com/expressly?languageType=0&channelCode=ccxt&vipCode=tg9j>`__
-     - .. image:: https://img.shields.io/badge/3-lightgray
+     - .. image:: https://img.shields.io/badge/1-lightgray
           :target: https://bitgetlimited.github.io/apidoc/en/swap
-          :alt: API Version 3
+          :alt: API Version 1
      
    * - Singapore
      - .. image:: https://user-images.githubusercontent.com/1294454/139516488-243a830d-05dd-446b-91c6-c1f18fe30c63.jpg
@@ -1064,17 +1075,6 @@ The ccxt library currently supports the following cryptocurrency exchange market
      
      - eqonex
      - `EQONEX <https://eqonex.com?referredByCode=zpa8kij4ouvBFup3>`__
-     - .. image:: https://img.shields.io/badge/*-lightgray
-          :target: https://developer.eqonex.com
-          :alt: API Version *
-     
-   * - Singapore
-     - .. image:: https://user-images.githubusercontent.com/1294454/107758499-05edd180-6d38-11eb-9e09-0b69602a7a15.jpg
-          :target: https://eqonex.com?referredByCode=zpa8kij4ouvBFup3
-          :alt: equos
-     
-     - equos
-     - `EQUOS <https://eqonex.com?referredByCode=zpa8kij4ouvBFup3>`__
      - .. image:: https://img.shields.io/badge/*-lightgray
           :target: https://developer.eqonex.com
           :alt: API Version *
@@ -1223,17 +1223,6 @@ The ccxt library currently supports the following cryptocurrency exchange market
           :alt: API Version *
      
    * - Switzerland
-     - .. image:: https://user-images.githubusercontent.com/1294454/34487620-3139a7b0-efe6-11e7-90f5-e520cef74451.jpg
-          :target: https://www.lykke.com
-          :alt: lykke
-     
-     - lykke
-     - `Lykke <https://www.lykke.com>`__
-     - .. image:: https://img.shields.io/badge/1-lightgray
-          :target: https://hft-api.lykke.com/swagger/ui/
-          :alt: API Version 1
-     
-   * - Switzerland
      - .. image:: https://user-images.githubusercontent.com/1294454/84547058-5fb27d80-ad0b-11ea-8711-78ac8b3c7f31.jpg
           :target: https://waves.exchange
           :alt: wavesexchange
@@ -1243,6 +1232,17 @@ The ccxt library currently supports the following cryptocurrency exchange market
      - .. image:: https://img.shields.io/badge/*-lightgray
           :target: https://docs.waves.exchange
           :alt: API Version *
+     
+   * - Taiwan
+     - .. image:: https://user-images.githubusercontent.com/1294454/158227251-3a92a220-9222-453c-9277-977c6677fe71.jpg
+          :target: https://www.bitopro.com
+          :alt: bitopro
+     
+     - bitopro
+     - `BitoPro <https://www.bitopro.com>`__
+     - .. image:: https://img.shields.io/badge/3-lightgray
+          :target: https://github.com/bitoex/bitopro-offical-api-docs/blob/master/v3-1/rest-1/rest.md
+          :alt: API Version 3
      
    * - Taiwan
      - .. image:: https://user-images.githubusercontent.com/1294454/45798859-1a872600-bcb4-11e8-8746-69291ce87b04.jpg
@@ -1342,6 +1342,17 @@ The ccxt library currently supports the following cryptocurrency exchange market
      - .. image:: https://img.shields.io/badge/1-lightgray
           :target: https://www.luno.com/en/api
           :alt: API Version 1
+     
+   * - UK
+     - .. image:: https://user-images.githubusercontent.com/1294454/155840500-1ea4fdf0-47c0-4daa-9597-c6c1cd51b9ec.jpg
+          :target: https://www.lykke.com
+          :alt: lykke
+     
+     - lykke
+     - `Lykke <https://www.lykke.com>`__
+     - .. image:: https://img.shields.io/badge/2-lightgray
+          :target: https://hft-apiv2.lykke.com/swagger/ui/index.html
+          :alt: API Version 2
      
    * - UK
      - .. image:: https://user-images.githubusercontent.com/1294454/30781780-03149dc4-a12e-11e7-82bb-313b269d24d4.jpg
@@ -1465,17 +1476,6 @@ The ccxt library currently supports the following cryptocurrency exchange market
           :alt: API Version *
      
    * - US
-     - .. image:: https://user-images.githubusercontent.com/1294454/107758499-05edd180-6d38-11eb-9e09-0b69602a7a15.jpg
-          :target: https://eqonex.com?referredByCode=zpa8kij4ouvBFup3
-          :alt: equos
-     
-     - equos
-     - `EQUOS <https://eqonex.com?referredByCode=zpa8kij4ouvBFup3>`__
-     - .. image:: https://img.shields.io/badge/*-lightgray
-          :target: https://developer.eqonex.com
-          :alt: API Version *
-     
-   * - US
      - .. image:: https://user-images.githubusercontent.com/1294454/141506670-12f6115f-f425-4cd8-b892-b51d157ca01f.jpg
           :target: https://ftx.com/#a=ccxt
           :alt: ftxus
@@ -1504,9 +1504,9 @@ The ccxt library currently supports the following cryptocurrency exchange market
      
      - idex
      - `IDEX <https://idex.io>`__
-     - .. image:: https://img.shields.io/badge/2-lightgray
+     - .. image:: https://img.shields.io/badge/3-lightgray
           :target: https://docs.idex.io/
-          :alt: API Version 2
+          :alt: API Version 3
      
    * - US
      - .. image:: https://user-images.githubusercontent.com/1294454/27822159-66153620-60ad-11e7-89e7-005f6d7f3de0.jpg

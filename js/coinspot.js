@@ -37,7 +37,6 @@ module.exports = class coinspot extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchLeverageTiers': false,
                 'fetchMarkOHLCV': false,
@@ -48,6 +47,8 @@ module.exports = class coinspot extends Exchange {
                 'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
@@ -304,7 +305,7 @@ module.exports = class coinspot extends Exchange {
         await this.loadMarkets ();
         const method = 'privatePostMy' + this.capitalize (side);
         if (type === 'market') {
-            throw new ExchangeError (this.id + ' allows limit orders only');
+            throw new ExchangeError (this.id + ' createOrder() allows limit orders only');
         }
         const request = {
             'cointype': this.marketId (symbol),

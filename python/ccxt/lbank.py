@@ -43,7 +43,6 @@ class lbank(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
                 'fetchLeverageTiers': False,
                 'fetchMarkets': True,
@@ -60,6 +59,8 @@ class lbank(Exchange):
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
@@ -85,7 +86,7 @@ class lbank(Exchange):
                 'api': 'https://api.lbank.info',
                 'www': 'https://www.lbank.info',
                 'doc': 'https://github.com/LBank-exchange/lbank-official-api-docs',
-                'fees': 'https://lbankinfo.zendesk.com/hc/en-gb/articles/360012072873-Trading-Fees',
+                'fees': 'https://www.lbank.info/fees.html',
                 'referral': 'https://www.lbex.io/invite?icode=7QCY',
             },
             'api': {
@@ -123,8 +124,9 @@ class lbank(Exchange):
                 },
             },
             'commonCurrencies': {
-                'VET_ERC20': 'VEN',
+                'GMT': 'GMT Token',
                 'PNT': 'Penta',
+                'VET_ERC20': 'VEN',
             },
             'options': {
                 'cacheSecretAsPem': True,
@@ -195,7 +197,7 @@ class lbank(Exchange):
                         'max': None,
                     },
                     'amount': {
-                        'min': None,
+                        'min': self.safe_float(market, 'minTranQua'),
                         'max': None,
                     },
                     'price': {
@@ -560,6 +562,10 @@ class lbank(Exchange):
         return self.parse_orders(data, None, since, limit)
 
     def fetch_closed_orders(self, symbol=None, since=None, limit=None, params={}):
+        self.load_markets()
+        if symbol is not None:
+            market = self.market(symbol)
+            symbol = market['symbol']
         orders = self.fetch_orders(symbol, since, limit, params)
         closed = self.filter_by(orders, 'status', 'closed')
         canceled = self.filter_by(orders, 'status', 'cancelled')  # cancelled orders may be partially filled
@@ -580,9 +586,46 @@ class lbank(Exchange):
         if tag is not None:
             request['memo'] = tag
         response = self.privatePostWithdraw(self.extend(request, params))
+        #
+        #     {
+        #         'result': 'true',
+        #         'withdrawId': 90082,
+        #         'fee':0.001
+        #     }
+        #
+        return self.parse_transaction(response, currency)
+
+    def parse_transaction(self, transaction, currency=None):
+        #
+        # withdraw
+        #
+        #     {
+        #         'result': 'true',
+        #         'withdrawId': 90082,
+        #         'fee':0.001
+        #     }
+        #
+        currency = self.safe_currency(None, currency)
         return {
-            'id': self.safe_string(response, 'id'),
-            'info': response,
+            'id': self.safe_string_2(transaction, 'id', 'withdrawId'),
+            'txid': None,
+            'timestamp': None,
+            'datetime': None,
+            'network': None,
+            'addressFrom': None,
+            'address': None,
+            'addressTo': None,
+            'amount': None,
+            'type': None,
+            'currency': currency['code'],
+            'status': None,
+            'updated': None,
+            'tagFrom': None,
+            'tag': None,
+            'tagTo': None,
+            'comment': None,
+            'fee': None,
+            'info': transaction,
         }
 
     def convert_secret_to_pem(self, secret):

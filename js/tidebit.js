@@ -38,7 +38,6 @@ module.exports = class tidebit extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchLeverageTiers': false,
                 'fetchMarkets': true,
@@ -52,6 +51,8 @@ module.exports = class tidebit extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
@@ -551,9 +552,31 @@ module.exports = class tidebit extends Exchange {
             request['memo'] = tag;
         }
         const result = await this.privatePostWithdrawsApply (this.extend (request, params));
+        return this.parseTransaction (result, currency);
+    }
+
+    parseTransaction (transaction, currency = undefined) {
+        currency = this.safeCurrency (undefined, currency);
         return {
-            'info': result,
             'id': undefined,
+            'txid': undefined,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'network': undefined,
+            'addressFrom': undefined,
+            'address': undefined,
+            'addressTo': undefined,
+            'amount': undefined,
+            'type': undefined,
+            'currency': currency['code'],
+            'status': undefined,
+            'updated': undefined,
+            'tagFrom': undefined,
+            'tag': undefined,
+            'tagTo': undefined,
+            'comment': undefined,
+            'fee': undefined,
+            'info': transaction,
         };
     }
 

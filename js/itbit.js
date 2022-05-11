@@ -40,7 +40,6 @@ module.exports = class itbit extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchLeverageTiers': false,
                 'fetchMarkOHLCV': false,
@@ -55,6 +54,8 @@ module.exports = class itbit extends Exchange {
                 'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'fetchTransactions': true,
                 'reduceMargin': false,
                 'setLeverage': false,
@@ -158,7 +159,7 @@ module.exports = class itbit extends Exchange {
         const symbol = this.safeSymbol (undefined, market);
         const serverTimeUTC = this.safeString (ticker, 'serverTimeUTC');
         if (!serverTimeUTC) {
-            throw new ExchangeError (this.id + ' fetchTicker returned a bad response: ' + this.json (ticker));
+            throw new ExchangeError (this.id + ' fetchTicker() returned a bad response: ' + this.json (ticker));
         }
         const timestamp = this.parse8601 (serverTimeUTC);
         const vwap = this.safeString (ticker, 'vwap24h');
@@ -630,7 +631,7 @@ module.exports = class itbit extends Exchange {
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         await this.loadMarkets ();
         if (type === 'market') {
-            throw new ExchangeError (this.id + ' allows limit orders only');
+            throw new ExchangeError (this.id + ' createOrder() allows limit orders only');
         }
         const walletIdInParams = ('walletId' in params);
         if (!walletIdInParams) {

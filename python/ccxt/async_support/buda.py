@@ -52,7 +52,6 @@ class buda(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
                 'fetchMarkets': True,
                 'fetchMarkOHLCV': False,
@@ -68,11 +67,17 @@ class buda(Exchange):
                 'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
+                'fetchWithdrawal': False,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
                 'setPositionMode': False,
+                'transfer': False,
                 'withdraw': True,
             },
             'urls': {
@@ -740,7 +745,7 @@ class buda(Exchange):
         await self.load_markets()
         currency = self.currency(code)
         if self.is_fiat(code):
-            raise NotSupported(self.id + ': fiat fetchDepositAddress() for ' + code + ' is not supported')
+            raise NotSupported(self.id + ' fetchDepositAddress() of fiat for ' + code + ' is not supported')
         request = {
             'currency': currency['id'],
         }
@@ -804,7 +809,7 @@ class buda(Exchange):
     async def fetch_deposits(self, code=None, since=None, limit=None, params={}):
         await self.load_markets()
         if code is None:
-            raise ArgumentsRequired(self.id + ': fetchDeposits() requires a currency code argument')
+            raise ArgumentsRequired(self.id + ' fetchDeposits() requires a currency code argument')
         currency = self.currency(code)
         request = {
             'currency': currency['id'],
@@ -817,7 +822,7 @@ class buda(Exchange):
     async def fetch_withdrawals(self, code=None, since=None, limit=None, params={}):
         await self.load_markets()
         if code is None:
-            raise ArgumentsRequired(self.id + ': fetchDeposits() requires a currency code argument')
+            raise ArgumentsRequired(self.id + ' fetchDeposits() requires a currency code argument')
         currency = self.currency(code)
         request = {
             'currency': currency['id'],

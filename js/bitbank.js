@@ -37,7 +37,6 @@ module.exports = class bitbank extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchLeverageTiers': false,
                 'fetchMarkOHLCV': false,
@@ -52,10 +51,15 @@ module.exports = class bitbank extends Exchange {
                 'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': true,
+                'fetchTransfer': false,
+                'fetchTransfers': false,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
                 'setPositionMode': false,
+                'transfer': false,
                 'withdraw': true,
             },
             'timeframes': {
@@ -324,6 +328,57 @@ module.exports = class bitbank extends Exchange {
         return this.parseTrades (trades, market, since, limit);
     }
 
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const response = await this.marketsGetSpotPairs (params);
+        //
+        //     {
+        //         success: '1',
+        //         data: {
+        //           pairs: [
+        //             {
+        //               name: 'btc_jpy',
+        //               base_asset: 'btc',
+        //               quote_asset: 'jpy',
+        //               maker_fee_rate_base: '0',
+        //               taker_fee_rate_base: '0',
+        //               maker_fee_rate_quote: '-0.0002',
+        //               taker_fee_rate_quote: '0.0012',
+        //               unit_amount: '0.0001',
+        //               limit_max_amount: '1000',
+        //               market_max_amount: '10',
+        //               market_allowance_rate: '0.2',
+        //               price_digits: '0',
+        //               amount_digits: '4',
+        //               is_enabled: true,
+        //               stop_order: false,
+        //               stop_order_and_cancel: false
+        //             },
+        //             ...
+        //           ]
+        //         }
+        //     }
+        //
+        const data = this.safeValue (response, 'data', {});
+        const pairs = this.safeValue (data, 'pairs', []);
+        const result = {};
+        for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i];
+            const marketId = this.safeString (pair, 'name');
+            const market = this.safeMarket (marketId);
+            const symbol = market['symbol'];
+            result[symbol] = {
+                'info': pair,
+                'symbol': symbol,
+                'maker': this.safeNumber (pair, 'maker_fee_rate_quote'),
+                'taker': this.safeNumber (pair, 'taker_fee_rate_quote'),
+                'percentage': true,
+                'tierBased': false,
+            };
+        }
+        return result;
+    }
+
     parseOHLCV (ohlcv, market = undefined) {
         //
         //     [
@@ -347,7 +402,7 @@ module.exports = class bitbank extends Exchange {
 
     async fetchOHLCV (symbol, timeframe = '5m', since = undefined, limit = undefined, params = {}) {
         if (since === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchOHLCV requires a since argument');
+            throw new ArgumentsRequired (this.id + ' fetchOHLCV() requires a since argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -603,11 +658,66 @@ module.exports = class bitbank extends Exchange {
             'amount': amount,
         };
         const response = await this.privatePostUserRequestWithdrawal (this.extend (request, params));
+        //
+        //     {
+        //         "success": 1,
+        //         "data": {
+        //             "uuid": "string",
+        //             "asset": "btc",
+        //             "amount": 0,
+        //             "account_uuid": "string",
+        //             "fee": 0,
+        //             "status": "DONE",
+        //             "label": "string",
+        //             "txid": "string",
+        //             "address": "string",
+        //             "requested_at": 0
+        //         }
+        //     }
+        //
         const data = this.safeValue (response, 'data', {});
-        const txid = this.safeString (data, 'txid');
+        return this.parseTransaction (data, currency);
+    }
+
+    parseTransaction (transaction, currency = undefined) {
+        //
+        // withdraw
+        //
+        //     {
+        //         "uuid": "string",
+        //         "asset": "btc",
+        //         "amount": 0,
+        //         "account_uuid": "string",
+        //         "fee": 0,
+        //         "status": "DONE",
+        //         "label": "string",
+        //         "txid": "string",
+        //         "address": "string",
+        //         "requested_at": 0
+        //     }
+        //
+        const txid = this.safeString (transaction, 'txid');
+        currency = this.safeCurrency (undefined, currency);
         return {
-            'info': response,
             'id': txid,
+            'txid': txid,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'network': undefined,
+            'addressFrom': undefined,
+            'address': undefined,
+            'addressTo': undefined,
+            'amount': undefined,
+            'type': undefined,
+            'currency': currency['code'],
+            'status': undefined,
+            'updated': undefined,
+            'tagFrom': undefined,
+            'tag': undefined,
+            'tagTo': undefined,
+            'comment': undefined,
+            'fee': undefined,
+            'info': transaction,
         };
     }
 

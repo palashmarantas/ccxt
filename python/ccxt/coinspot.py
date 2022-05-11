@@ -40,7 +40,6 @@ class coinspot(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
                 'fetchLeverageTiers': False,
                 'fetchMarkOHLCV': False,
@@ -51,6 +50,8 @@ class coinspot(Exchange):
                 'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
@@ -295,7 +296,7 @@ class coinspot(Exchange):
         self.load_markets()
         method = 'privatePostMy' + self.capitalize(side)
         if type == 'market':
-            raise ExchangeError(self.id + ' allows limit orders only')
+            raise ExchangeError(self.id + ' createOrder() allows limit orders only')
         request = {
             'cointype': self.market_id(symbol),
             'amount': amount,

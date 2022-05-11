@@ -21,6 +21,7 @@ declare module 'ccxt' {
     export class ArgumentsRequired extends ExchangeError {}
     export class BadRequest extends ExchangeError {}
     export class BadSymbol extends BadRequest {}
+    export class MarginModeAlreadySet extends BadRequest {}
     export class BadResponse extends ExchangeError {}
     export class NullResponse extends BadResponse {}
     export class InsufficientFunds extends ExchangeError {}
@@ -85,7 +86,7 @@ declare module 'ccxt' {
             amount: number | undefined,
             price: number | undefined
         };
-        limits: { 
+        limits: {
             amount?: MinMax,
             cost?: MinMax,
             leverage?: MinMax,
@@ -307,7 +308,7 @@ declare module 'ccxt' {
         countries: string[];
         // set by loadMarkets
         markets: Dictionary<Market>;
-        marketsById: Dictionary<Market>;
+        markets_by_id: Dictionary<Market>;
         currencies: Dictionary<Currency>;
         ids: string[];
         symbols: string[];
@@ -467,6 +468,7 @@ declare module 'ccxt' {
     export class bithumb extends Exchange {}
     export class bitmart extends Exchange {}
     export class bitmex extends Exchange {}
+    export class bitopro extends Exchange {}
     export class bitpanda extends Exchange {}
     export class bitrue extends Exchange {}
     export class bitso extends Exchange {}
@@ -474,6 +476,7 @@ declare module 'ccxt' {
     export class bitstamp1 extends Exchange {}
     export class bittrex extends Exchange {}
     export class bitvavo extends Exchange {}
+    export class bkex extends Exchange {}
     export class bl3p extends Exchange {}
     export class blockchaincom extends Exchange {}
     export class btcalpha extends Exchange {}
@@ -503,7 +506,6 @@ declare module 'ccxt' {
     export class deribit extends Exchange {}
     export class digifinex extends Exchange {}
     export class eqonex extends Exchange {}
-    export class equos extends eqonex {}
     export class exmo extends Exchange {}
     export class flowbtc extends ndax {}
     export class fmfwio extends hitbtc {}
@@ -527,6 +529,7 @@ declare module 'ccxt' {
     export class kuna extends Exchange {}
     export class latoken extends Exchange {}
     export class lbank extends Exchange {}
+    export class lbank2 extends Exchange {}
     export class liquid extends Exchange {}
     export class luno extends Exchange {}
     export class lykke extends Exchange {}
@@ -588,6 +591,7 @@ declare module 'ccxt' {
         | 'bithumb'
         | 'bitmart'
         | 'bitmex'
+        | 'bitopro'
         | 'bitpanda'
         | 'bitrue'
         | 'bitso'
@@ -595,6 +599,7 @@ declare module 'ccxt' {
         | 'bitstamp1'
         | 'bittrex'
         | 'bitvavo'
+        | 'bkex'
         | 'bl3p'
         | 'blockchaincom'
         | 'btcalpha'
@@ -624,7 +629,6 @@ declare module 'ccxt' {
         | 'deribit'
         | 'digifinex'
         | 'eqonex'
-        | 'equos'
         | 'exmo'
         | 'flowbtc'
         | 'fmfwio'
@@ -648,6 +652,7 @@ declare module 'ccxt' {
         | 'kuna'
         | 'latoken'
         | 'lbank'
+        | 'lbank2'
         | 'liquid'
         | 'luno'
         | 'lykke'

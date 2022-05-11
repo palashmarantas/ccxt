@@ -22,7 +22,7 @@
 
 # ----------------------------------------------------------------------------
 
-__version__ = '1.73.96'
+__version__ = '1.82.15'
 
 # ----------------------------------------------------------------------------
 
@@ -32,6 +32,8 @@ from ccxt.base.precise import Precise                       # noqa: F401
 from ccxt.base.decimal_to_precision import decimal_to_precision  # noqa: F401
 from ccxt.base.decimal_to_precision import TRUNCATE              # noqa: F401
 from ccxt.base.decimal_to_precision import ROUND                 # noqa: F401
+from ccxt.base.decimal_to_precision import ROUND_UP              # noqa: F401
+from ccxt.base.decimal_to_precision import ROUND_DOWN            # noqa: F401
 from ccxt.base.decimal_to_precision import DECIMAL_PLACES        # noqa: F401
 from ccxt.base.decimal_to_precision import SIGNIFICANT_DIGITS    # noqa: F401
 from ccxt.base.decimal_to_precision import TICK_SIZE             # noqa: F401
@@ -48,6 +50,7 @@ from ccxt.base.errors import AccountSuspended               # noqa: F401
 from ccxt.base.errors import ArgumentsRequired              # noqa: F401
 from ccxt.base.errors import BadRequest                     # noqa: F401
 from ccxt.base.errors import BadSymbol                      # noqa: F401
+from ccxt.base.errors import MarginModeAlreadySet           # noqa: F401
 from ccxt.base.errors import BadResponse                    # noqa: F401
 from ccxt.base.errors import NullResponse                   # noqa: F401
 from ccxt.base.errors import InsufficientFunds              # noqa: F401
@@ -92,6 +95,7 @@ from ccxt.bitget import bitget                              # noqa: F401
 from ccxt.bithumb import bithumb                            # noqa: F401
 from ccxt.bitmart import bitmart                            # noqa: F401
 from ccxt.bitmex import bitmex                              # noqa: F401
+from ccxt.bitopro import bitopro                            # noqa: F401
 from ccxt.bitpanda import bitpanda                          # noqa: F401
 from ccxt.bitrue import bitrue                              # noqa: F401
 from ccxt.bitso import bitso                                # noqa: F401
@@ -99,6 +103,7 @@ from ccxt.bitstamp import bitstamp                          # noqa: F401
 from ccxt.bitstamp1 import bitstamp1                        # noqa: F401
 from ccxt.bittrex import bittrex                            # noqa: F401
 from ccxt.bitvavo import bitvavo                            # noqa: F401
+from ccxt.bkex import bkex                                  # noqa: F401
 from ccxt.bl3p import bl3p                                  # noqa: F401
 from ccxt.blockchaincom import blockchaincom                # noqa: F401
 from ccxt.btcalpha import btcalpha                          # noqa: F401
@@ -128,7 +133,6 @@ from ccxt.delta import delta                                # noqa: F401
 from ccxt.deribit import deribit                            # noqa: F401
 from ccxt.digifinex import digifinex                        # noqa: F401
 from ccxt.eqonex import eqonex                              # noqa: F401
-from ccxt.equos import equos                                # noqa: F401
 from ccxt.exmo import exmo                                  # noqa: F401
 from ccxt.flowbtc import flowbtc                            # noqa: F401
 from ccxt.fmfwio import fmfwio                              # noqa: F401
@@ -152,6 +156,7 @@ from ccxt.kucoinfutures import kucoinfutures                # noqa: F401
 from ccxt.kuna import kuna                                  # noqa: F401
 from ccxt.latoken import latoken                            # noqa: F401
 from ccxt.lbank import lbank                                # noqa: F401
+from ccxt.lbank2 import lbank2                              # noqa: F401
 from ccxt.liquid import liquid                              # noqa: F401
 from ccxt.luno import luno                                  # noqa: F401
 from ccxt.lykke import lykke                                # noqa: F401
@@ -211,6 +216,7 @@ exchanges = [
     'bithumb',
     'bitmart',
     'bitmex',
+    'bitopro',
     'bitpanda',
     'bitrue',
     'bitso',
@@ -218,6 +224,7 @@ exchanges = [
     'bitstamp1',
     'bittrex',
     'bitvavo',
+    'bkex',
     'bl3p',
     'blockchaincom',
     'btcalpha',
@@ -247,7 +254,6 @@ exchanges = [
     'deribit',
     'digifinex',
     'eqonex',
-    'equos',
     'exmo',
     'flowbtc',
     'fmfwio',
@@ -271,6 +277,7 @@ exchanges = [
     'kuna',
     'latoken',
     'lbank',
+    'lbank2',
     'liquid',
     'luno',
     'lykke',

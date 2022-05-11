@@ -3,7 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { ExchangeError, ArgumentsRequired, AuthenticationError, NullResponse, InvalidOrder, NotSupported, InsufficientFunds, InvalidNonce, OrderNotFound, RateLimitExceeded, DDoSProtection } = require ('./base/errors');
+const { ExchangeError, ArgumentsRequired, AuthenticationError, NullResponse, InvalidOrder, NotSupported, InsufficientFunds, InvalidNonce, OrderNotFound, RateLimitExceeded, DDoSProtection, BadSymbol } = require ('./base/errors');
 const Precise = require ('./base/Precise');
 
 //  ---------------------------------------------------------------------------
@@ -28,7 +28,9 @@ module.exports = class cex extends Exchange {
                 'fetchBalance': true,
                 'fetchClosedOrders': true,
                 'fetchCurrencies': true,
+                'fetchDeposit': false,
                 'fetchDepositAddress': true,
+                'fetchDeposits': false,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
@@ -45,6 +47,14 @@ module.exports = class cex extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': true,
+                'fetchTransfer': false,
+                'fetchTransfers': false,
+                'fetchWithdrawal': false,
+                'fetchWithdrawals': false,
+                'transfer': false,
+                'withdraw': false,
             },
             'timeframes': {
                 '1m': '1m',
@@ -141,6 +151,7 @@ module.exports = class cex extends Exchange {
                     'Invalid API key': AuthenticationError,
                     'There was an error while placing your order': InvalidOrder,
                     'Sorry, too many clients already': DDoSProtection,
+                    'Invalid Symbols Pair': BadSymbol,
                 },
             },
             'options': {
@@ -514,12 +525,13 @@ module.exports = class cex extends Exchange {
             'currencies': currencies.join ('/'),
         };
         const response = await this.publicGetTickersCurrencies (this.extend (request, params));
-        const tickers = response['data'];
+        const tickers = this.safeValue (response, 'data', []);
         const result = {};
         for (let t = 0; t < tickers.length; t++) {
             const ticker = tickers[t];
-            const symbol = ticker['pair'].replace (':', '/');
-            const market = this.markets[symbol];
+            const marketId = this.safeString (ticker, 'pair');
+            const market = this.safeMarket (marketId, undefined, ':');
+            const symbol = market['symbol'];
             result[symbol] = this.parseTicker (ticker, market);
         }
         return this.filterByArray (result, 'symbol', symbols);
@@ -579,6 +591,41 @@ module.exports = class cex extends Exchange {
         };
         const response = await this.publicGetTradeHistoryPair (this.extend (request, params));
         return this.parseTrades (response, market, since, limit);
+    }
+
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const response = await this.privatePostGetMyfee (params);
+        //
+        //      {
+        //          e: 'get_myfee',
+        //          ok: 'ok',
+        //          data: {
+        //            'BTC:USD': { buy: '0.25', sell: '0.25', buyMaker: '0.15', sellMaker: '0.15' },
+        //            'ETH:USD': { buy: '0.25', sell: '0.25', buyMaker: '0.15', sellMaker: '0.15' },
+        //            ..
+        //          }
+        //      }
+        //
+        const data = this.safeValue (response, 'data', {});
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            const market = this.market (symbol);
+            const fee = this.safeValue (data, market['id'], {});
+            const makerString = this.safeString (fee, 'buyMaker');
+            const takerString = this.safeString (fee, 'buy');
+            const maker = this.parseNumber (Precise.stringDiv (makerString, '100'));
+            const taker = this.parseNumber (Precise.stringDiv (takerString, '100'));
+            result[symbol] = {
+                'info': fee,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': true,
+            };
+        }
+        return result;
     }
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
@@ -1288,7 +1335,7 @@ module.exports = class cex extends Exchange {
     async fetchDepositAddress (code, params = {}) {
         if (code === 'XRP' || code === 'XLM') {
             // https://github.com/ccxt/ccxt/pull/2327#issuecomment-375204856
-            throw new NotSupported (this.id + ' fetchDepositAddress does not support XRP and XLM addresses yet (awaiting docs from CEX.io)');
+            throw new NotSupported (this.id + ' fetchDepositAddress() does not support XRP and XLM addresses yet (awaiting docs from CEX.io)');
         }
         await this.loadMarkets ();
         const currency = this.currency (code);

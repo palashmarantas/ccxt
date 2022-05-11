@@ -59,6 +59,8 @@ class bibox(Exchange):
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'fetchWithdrawals': True,
                 'withdraw': True,
             },
@@ -117,8 +119,8 @@ class bibox(Exchange):
                 'trading': {
                     'tierBased': False,
                     'percentage': True,
-                    'taker': self.parse_number('0.001'),
-                    'maker': self.parse_number('0.0008'),
+                    'taker': self.parse_number('0.002'),
+                    'maker': self.parse_number('0.001'),
                 },
                 'funding': {
                     'tierBased': False,
@@ -155,7 +157,7 @@ class bibox(Exchange):
                 'APENFT(NFT)': 'NFT',
                 'BOX': 'DefiBox',
                 'BPT': 'BlockPool Token',
-                'GTC': 'Game.com',
+                'GMT': 'GMT Token',
                 'KEY': 'Bihu',
                 'MTC': 'MTC Mesh Network',  # conflict with MTC Docademic doc.com Token https://github.com/ccxt/ccxt/issues/6081 https://github.com/ccxt/ccxt/issues/3025
                 'NFT': 'NFT Protocol',
@@ -789,7 +791,14 @@ class bibox(Exchange):
         #         'status': 3
         #     }
         #
-        id = self.safe_string(transaction, 'id')
+        # withdraw
+        #
+        #     {
+        #         "result": 228,  # withdrawal id
+        #         "cmd":"transfer/transferOut"
+        #     }
+        #
+        id = self.safe_string_2(transaction, 'id', 'result')
         address = self.safe_string(transaction, 'to_address')
         currencyId = self.safe_string(transaction, 'coin_symbol')
         code = self.safe_currency_code(currencyId, currency)
@@ -1243,11 +1252,7 @@ class bibox(Exchange):
         #
         outerResults = self.safe_value(response, 'result')
         firstResult = self.safe_value(outerResults, 0, {})
-        id = self.safe_value(firstResult, 'result')
-        return {
-            'info': response,
-            'id': id,
-        }
+        return self.parse_transaction(firstResult, currency)
 
     async def fetch_funding_fees(self, codes=None, params={}):
         # by default it will try load withdrawal fees of all currencies(with separate requests)

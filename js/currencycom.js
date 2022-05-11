@@ -15,7 +15,7 @@ module.exports = class currencycom extends Exchange {
             'id': 'currencycom',
             'name': 'Currency.com',
             'countries': [ 'BY' ], // Belarus
-            'rateLimit': 500,
+            'rateLimit': 100,
             'certified': true,
             'pro': true,
             'version': 'v2',
@@ -35,7 +35,9 @@ module.exports = class currencycom extends Exchange {
                 'createLimitOrder': true,
                 'createMarketOrder': true,
                 'createOrder': true,
-                'deposit': undefined,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'editOrder': 'emulated',
                 'fetchAccounts': true,
                 'fetchBalance': true,
@@ -61,8 +63,8 @@ module.exports = class currencycom extends Exchange {
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
                 'fetchL2OrderBook': true,
-                'fetchLedger': undefined,
-                'fetchLedgerEntry': undefined,
+                'fetchLedger': true,
+                'fetchLedgerEntry': false,
                 'fetchLeverage': true,
                 'fetchLeverageTiers': false,
                 'fetchMarkets': true,
@@ -77,14 +79,14 @@ module.exports = class currencycom extends Exchange {
                 'fetchOrders': undefined,
                 'fetchOrderTrades': undefined,
                 'fetchPosition': undefined,
-                'fetchPositions': undefined,
+                'fetchPositions': true,
                 'fetchPositionsRisk': undefined,
                 'fetchPremiumIndexOHLCV': false,
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
-                'fetchTradingFee': undefined,
+                'fetchTradingFee': false,
                 'fetchTradingFees': true,
                 'fetchTradingLimits': undefined,
                 'fetchTransactions': true,
@@ -110,15 +112,17 @@ module.exports = class currencycom extends Exchange {
                 '1d': '1d',
                 '1w': '1w',
             },
+            'hostname': 'backend.currency.com',
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/83718672-36745c00-a63e-11ea-81a9-677b1f789a4d.jpg',
                 'api': {
-                    'public': 'https://api-adapter.backend.currency.com/api',
-                    'private': 'https://api-adapter.backend.currency.com/api',
+                    'public': 'https://api-adapter.{hostname}/api',
+                    'private': 'https://api-adapter.{hostname}/api',
+                    'marketcap': 'https://marketcap.{hostname}/api',
                 },
                 'test': {
-                    'public': 'https://demo-api-adapter.backend.currency.com/api',
-                    'private': 'https://demo-api-adapter.backend.currency.com/api',
+                    'public': 'https://demo-api-adapter.{hostname}/api',
+                    'private': 'https://demo-api-adapter.{hostname}/api',
                 },
                 'www': 'https://www.currency.com',
                 'referral': 'https://currency.com/trading/signup?c=362jaimv&pid=referral',
@@ -127,64 +131,86 @@ module.exports = class currencycom extends Exchange {
                 ],
                 'fees': 'https://currency.com/fees-charges',
             },
+            // rate-limits are described at: https://currency.com/api-get-started
             'api': {
                 'public': {
-                    'get': [
-                        'v1/time',
-                        'v2/time',
-                        'v1/exchangeInfo',
-                        'v2/exchangeInfo',
-                        'v1/depth',
-                        'v2/depth',
-                        'v1/aggTrades',
-                        'v2/aggTrades',
-                        'v1/klines',
-                        'v2/klines',
-                        'v1/ticker/24hr',
-                        'v2/ticker/24hr',
-                    ],
+                    'get': {
+                        'v1/time': 1,
+                        'v1/exchangeInfo': 1,
+                        'v1/depth': 1,
+                        'v1/aggTrades': 1,
+                        'v1/klines': 1,
+                        'v1/ticker/24hr': 1,
+                        'v2/time': 1,
+                        'v2/exchangeInfo': 1,
+                        'v2/depth': 1,
+                        'v2/aggTrades': 1,
+                        'v2/klines': 1,
+                        'v2/ticker/24hr': 1,
+                    },
+                },
+                'marketcap': {
+                    'get': {
+                        'v1/assets': 1,
+                        'v1/candles': 1,
+                        'v1/orderbook': 1,
+                        'v1/summary': 1,
+                        'v1/ticker': 1,
+                        'v1/token/assets': 1,
+                        'v1/token/orderbook': 1,
+                        'v1/token/summary': 1,
+                        'v1/token/ticker': 1,
+                        'v1/token/trades': 1,
+                        'v1/token_crypto/OHLC': 1,
+                        'v1/token_crypto/assets': 1,
+                        'v1/token_crypto/orderbook': 1,
+                        'v1/token_crypto/summary': 1,
+                        'v1/token_crypto/ticker': 1,
+                        'v1/token_crypto/trades': 1,
+                        'v1/trades': 1,
+                    },
                 },
                 'private': {
-                    'get': [
-                        'v1/account',
-                        'v2/account',
-                        'v1/currencies',
-                        'v2/currencies',
-                        'v1/deposits',
-                        'v2/deposits',
-                        'v1/depositAddress',
-                        'v2/depositAddress',
-                        'v1/ledger',
-                        'v2/ledger',
-                        'v1/leverageSettings',
-                        'v2/leverageSettings',
-                        'v1/myTrades',
-                        'v2/myTrades',
-                        'v1/openOrders',
-                        'v2/openOrders',
-                        'v1/tradingPositions',
-                        'v2/tradingPositions',
-                        'v1/tradingPositionsHistory',
-                        'v2/tradingPositionsHistory',
-                        'v1/transactions',
-                        'v2/transactions',
-                        'v1/withdrawals',
-                        'v2/withdrawals',
-                    ],
-                    'post': [
-                        'v1/order',
-                        'v2/order',
-                        'v1/updateTradingPosition',
-                        'v2/updateTradingPosition',
-                        'v1/updateTradingOrder',
-                        'v2/updateTradingOrder',
-                        'v1/closeTradingPosition',
-                        'v2/closeTradingPosition',
-                    ],
-                    'delete': [
-                        'v1/order',
-                        'v2/order',
-                    ],
+                    'get': {
+                        'v1/account': 1,
+                        'v1/currencies': 1,
+                        'v1/deposits': 1,
+                        'v1/depositAddress': 1,
+                        'v1/ledger': 1,
+                        'v1/leverageSettings': 1,
+                        'v1/myTrades': 1,
+                        'v1/openOrders': 1,
+                        'v1/tradingPositions': 1,
+                        'v1/tradingPositionsHistory': 1,
+                        'v1/transactions': 1,
+                        'v1/withdrawals': 1,
+                        'v2/account': 1,
+                        'v2/currencies': 1,
+                        'v2/deposits': 1,
+                        'v2/depositAddress': 1,
+                        'v2/ledger': 1,
+                        'v2/leverageSettings': 1,
+                        'v2/myTrades': 1,
+                        'v2/openOrders': 1,
+                        'v2/tradingPositions': 1,
+                        'v2/tradingPositionsHistory': 1,
+                        'v2/transactions': 1,
+                        'v2/withdrawals': 1,
+                    },
+                    'post': {
+                        'v1/order': 1,
+                        'v1/updateTradingPosition': 1,
+                        'v1/updateTradingOrder': 1,
+                        'v1/closeTradingPosition': 1,
+                        'v2/order': 1,
+                        'v2/updateTradingPosition': 1,
+                        'v2/updateTradingOrder': 1,
+                        'v2/closeTradingPosition': 1,
+                    },
+                    'delete': {
+                        'v1/order': 1,
+                        'v2/order': 1,
+                    },
                 },
             },
             'fees': {
@@ -210,6 +236,8 @@ module.exports = class currencycom extends Exchange {
                     'limit': 'RESULT', // we change it from 'ACK' by default to 'RESULT'
                     'stop': 'RESULT',
                 },
+                'leverage_markets_suffix': '_LEVERAGE',
+                'collateralCurrencies': [ 'USD', 'EUR', 'USDT' ],
             },
             'exceptions': {
                 'broad': {
@@ -218,6 +246,8 @@ module.exports = class currencycom extends Exchange {
                     'Order would trigger immediately.': InvalidOrder,
                     'Account has insufficient balance for requested action.': InsufficientFunds,
                     'Rest API trading is not enabled.': ExchangeNotAvailable,
+                    'Combination of parameters invalid': BadRequest,
+                    'Invalid limit price': BadRequest,
                     'Only leverage symbol allowed here:': BadSymbol, // when you fetchLeverage for non-leverage symbols, like 'BTC/USDT' instead of 'BTC/USDT_LEVERAGE': {"code":"-1128","msg":"Only leverage symbol allowed here: BTC/USDT"}
                 },
                 'exact': {
@@ -225,10 +255,11 @@ module.exports = class currencycom extends Exchange {
                     '-1013': InvalidOrder, // createOrder -> 'invalid quantity'/'invalid price'/MIN_NOTIONAL
                     '-1021': InvalidNonce, // 'your time is ahead of server'
                     '-1022': AuthenticationError, // {"code":-1022,"msg":"Signature for this request is not valid."}
+                    '-1030': InvalidOrder, // {"code":"-1030","msg":"You mentioned an invalid value for the price parameter."}
                     '-1100': InvalidOrder, // createOrder(symbol, 1, asdf) -> 'Illegal characters found in parameter 'price'
                     '-1104': ExchangeError, // Not all sent parameters were read, read 8 parameters but was sent 9
                     '-1025': AuthenticationError, // {"code":-1025,"msg":"Invalid API-key, IP, or permissions for action"}
-                    '-1128': BadRequest, // {"code":-1128,"msg":"Combination of optional parameters invalid."}
+                    '-1128': BadRequest, // {"code":-1128,"msg":"Combination of optional parameters invalid."} | {"code":"-1128","msg":"Combination of parameters invalid"} | {"code":"-1128","msg":"Invalid limit price"}
                     '-2010': ExchangeError, // generic error code for createOrder -> 'Account has insufficient balance for requested action.', {"code":-2010,"msg":"Rest API trading is not enabled."}, etc...
                     '-2011': OrderNotFound, // cancelOrder(1, 'BTC/USDT') -> 'UNKNOWN_ORDER'
                     '-2013': OrderNotFound, // fetchOrder (1, 'BTC/USDT') -> 'Order does not exist'
@@ -238,6 +269,7 @@ module.exports = class currencycom extends Exchange {
             },
             'commonCurrencies': {
                 'ACN': 'Accenture',
+                'AMC': 'AMC Entertainment Holdings',
                 'BNS': 'Bank of Nova Scotia',
                 'CAR': 'Avis Budget Group Inc',
                 'CLR': 'Continental Resources',
@@ -275,19 +307,21 @@ module.exports = class currencycom extends Exchange {
         //
         //     [
         //         {
-        //           name: "US Dollar",
-        //           displaySymbol: "USD.cx",
-        //           precision: "2",
-        //           type: "FIAT",
-        //           minWithdrawal: "100.0",
-        //           maxWithdrawal: "1.0E+8",
-        //           minDeposit: "100.0",
+        //             "name": "Euro",
+        //             "displaySymbol": "EUR.cx",
+        //             "precision": "2",
+        //             "type": "FIAT",
+        //             "minWithdrawal": "90.0",
+        //             "maxWithdrawal": "1.0E+8",
+        //             "commissionMin": "0.02", // some instruments do not have this property
+        //             "commissionPercent": "1.5", // some instruments do not have this property
+        //             "minDeposit": "90.0",
         //         },
         //         {
         //             name: "Bitcoin",
         //             displaySymbol: "BTC",
         //             precision: "8",
-        //             type: "CRYPTO",  // Note: only several major ones have this value. Others (like USDT) have value : "TOKEN"
+        //             type: "CRYPTO", // only a few major currencies have this value, others like USDT have a value of "TOKEN"
         //             minWithdrawal: "0.00020",
         //             commissionFixed: "0.00010",
         //             minDeposit: "0.00010",
@@ -305,7 +339,6 @@ module.exports = class currencycom extends Exchange {
                 'id': id,
                 'code': code,
                 'address': this.safeString (currency, 'baseAddress'),
-                'info': currency,
                 'type': this.safeStringLower (currency, 'type'),
                 'name': this.safeString (currency, 'name'),
                 'active': undefined,
@@ -320,13 +353,14 @@ module.exports = class currencycom extends Exchange {
                     },
                     'withdraw': {
                         'min': this.safeNumber (currency, 'minWithdrawal'),
-                        'max': undefined,
+                        'max': this.safeNumber (currency, 'maxWithdrawal'),
                     },
                     'deposit': {
                         'min': this.safeNumber (currency, 'minDeposit'),
                         'max': undefined,
                     },
                 },
+                'info': currency,
             };
         }
         return result;
@@ -336,64 +370,49 @@ module.exports = class currencycom extends Exchange {
         const response = await this.publicGetV2ExchangeInfo (params);
         //
         //     {
-        //         "timezone":"UTC",
-        //         "serverTime":1603252990096,
-        //         "rateLimits":[
-        //             {"rateLimitType":"REQUEST_WEIGHT","interval":"MINUTE","intervalNum":1,"limit":1200},
-        //             {"rateLimitType":"ORDERS","interval":"SECOND","intervalNum":1,"limit":10},
-        //             {"rateLimitType":"ORDERS","interval":"DAY","intervalNum":1,"limit":864000},
+        //         timezone: "UTC",
+        //         serverTime: "1645186287261",
+        //         rateLimits: [
+        //             { rateLimitType: "REQUEST_WEIGHT", interval: "MINUTE", intervalNum: "1", limit: "1200" },
+        //             { rateLimitType: "ORDERS", interval: "SECOND", intervalNum: "1", limit: "10" },
+        //             { rateLimitType: "ORDERS", interval: "DAY", intervalNum: "1", limit: "864000" },
         //         ],
-        //         "exchangeFilters":[],
-        //         "symbols":[
+        //         exchangeFilters: [],
+        //         symbols: [
         //             {
-        //                 "symbol":"EVK",
-        //                 "name":"Evonik",
-        //                 "status":"BREAK",
-        //                 "baseAsset":"EVK",
-        //                 "baseAssetPrecision":3,
-        //                 "quoteAsset":"EUR",
-        //                 "quoteAssetId":"EUR",
-        //                 "quotePrecision":3,
-        //                 "orderTypes":["LIMIT","MARKET"],
-        //                 "filters":[
-        //                     {"filterType":"LOT_SIZE","minQty":"1","maxQty":"27000","stepSize":"1"},
-        //                     {"filterType":"MIN_NOTIONAL","minNotional":"23"}
+        //                 symbol: "BTC/USDT", // BTC/USDT, BTC/USDT_LEVERAGE
+        //                 name: "Bitcoin / Tether",
+        //                 status: "TRADING", // TRADING, BREAK, HALT
+        //                 baseAsset: "BTC",
+        //                 baseAssetPrecision: "4",
+        //                 quoteAsset: "USDT",
+        //                 quoteAssetId: "USDT", // USDT, USDT_LEVERAGE
+        //                 quotePrecision: "4",
+        //                 orderTypes: [ "LIMIT", "MARKET" ], // LIMIT, MARKET, STOP
+        //                 filters: [
+        //                     { filterType: "LOT_SIZE", minQty: "0.0001", maxQty: "100", stepSize: "0.0001", },
+        //                     { filterType: "MIN_NOTIONAL", minNotional: "5", },
         //                 ],
-        //                 "marketType":"SPOT",
-        //                 "country":"DE",
-        //                 "sector":"Basic Materials",
-        //                 "industry":"Diversified Chemicals",
-        //                 "tradingHours":"UTC; Mon 07:02 - 15:30; Tue 07:02 - 15:30; Wed 07:02 - 15:30; Thu 07:02 - 15:30; Fri 07:02 - 15:30",
-        //                 "tickSize":0.005,
-        //                 "tickValue":0.11125,
-        //                 "exchangeFee":0.05
-        //             },
-        //             {
-        //                 "symbol":"BTC/USD_LEVERAGE",
-        //                 "name":"Bitcoin / USD",
-        //                 "status":"TRADING",
-        //                 "baseAsset":"BTC",
-        //                 "baseAssetPrecision":3,
-        //                 "quoteAsset":"USD",
-        //                 "quoteAssetId":"USD_LEVERAGE",
-        //                 "quotePrecision":3,
-        //                 "orderTypes":["LIMIT","MARKET","STOP"],
-        //                 "filters":[
-        //                     {"filterType":"LOT_SIZE","minQty":"0.001","maxQty":"100","stepSize":"0.001"},
-        //                     {"filterType":"MIN_NOTIONAL","minNotional":"13"}
-        //                 ],
-        //                 "marketType":"LEVERAGE",
-        //                 "longRate":-0.01,
-        //                 "shortRate":0.01,
-        //                 "swapChargeInterval":480,
-        //                 "country":"",
-        //                 "sector":"",
-        //                 "industry":"",
-        //                 "tradingHours":"UTC; Mon - 21:00, 21:05 -; Tue - 21:00, 21:05 -; Wed - 21:00, 21:05 -; Thu - 21:00, 21:05 -; Fri - 21:00, 22:01 -; Sat - 21:00, 21:05 -; Sun - 20:00, 21:05 -",
-        //                 "tickSize":0.05,
-        //                 "tickValue":610.20875,
-        //                 "makerFee":-0.025,
-        //                 "takerFee":0.075
+        //                 marketModes: [ "REGULAR" ], // CLOSE_ONLY, LONG_ONLY, REGULAR
+        //                 marketType: "SPOT", // SPOT, LEVERAGE
+        //                 longRate: -0.0684932, // LEVERAGE only
+        //                 shortRate: -0.0684932, // LEVERAGE only
+        //                 swapChargeInterval: 1440, // LEVERAGE only
+        //                 country: "",
+        //                 sector: "",
+        //                 industry: "",
+        //                 tradingHours: "UTC; Mon - 22:00, 22:05 -; Tue - 22:00, 22:05 -; Wed - 22:00, 22:05 -; Thu - 22:00, 22:05 -; Fri - 22:00, 23:01 -; Sat - 22:00, 22:05 -; Sun - 21:00, 22:05 -",
+        //                 tickSize: "0.01",
+        //                 tickValue: "403.4405", // not available in BTC/USDT_LEVERAGE, but available in BTC/USD_LEVERAGE
+        //                 exchangeFee: "0.2", // SPOT only
+        //                 tradingFee: 0.075, // LEVERAGE only
+        //                 makerFee: -0.025, // LEVERAGE only
+        //                 takerFee: 0.06, // LEVERAGE only
+        //                 maxSLGap: 50, // LEVERAGE only
+        //                 minSLGap: 1, // LEVERAGE only
+        //                 maxTPGap: 50, // LEVERAGE only
+        //                 minTPGap: 0.5, // LEVERAGE only
+        //                 assetType: "CRYPTOCURRENCY",
         //             },
         //         ]
         //     }
@@ -411,22 +430,24 @@ module.exports = class currencycom extends Exchange {
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
             let symbol = base + '/' + quote;
-            if (id.indexOf ('/') >= 0) {
-                symbol = id;
+            const type = this.safeString (market, 'marketType');
+            const spot = (type === 'SPOT');
+            const futures = false;
+            const swap = (type === 'LEVERAGE');
+            const margin = swap; // as we decided to set
+            if (swap) {
+                symbol = symbol.replace (this.options['leverage_markets_suffix'], '');
+                symbol += ':' + quote;
             }
+            const active = this.safeString (market, 'status') === 'TRADING';
+            // to set taker & maker fees, we use one from the below data - pairs either have 'exchangeFee' or 'tradingFee', if none of them (rare cases), then they should have 'takerFee & makerFee'
+            const exchangeFee = this.safeString2 (market, 'exchangeFee', 'tradingFee');
+            let makerFee = this.safeString (market, 'makerFee', exchangeFee);
+            let takerFee = this.safeString (market, 'takerFee', exchangeFee);
+            makerFee = Precise.stringDiv (makerFee, '100');
+            takerFee = Precise.stringDiv (takerFee, '100');
             const filters = this.safeValue (market, 'filters', []);
             const filtersByType = this.indexBy (filters, 'filterType');
-            const status = this.safeString (market, 'status');
-            const active = (status === 'TRADING');
-            let type = this.safeStringLower (market, 'marketType');
-            if (type === 'leverage') {
-                type = 'margin';
-            }
-            const spot = (type === 'spot');
-            const margin = (type === 'margin');
-            const exchangeFee = this.safeString2 (market, 'exchangeFee', 'tradingFee');
-            const maker = Precise.stringDiv (this.safeString (market, 'makerFee', exchangeFee), '100');
-            const taker = Precise.stringDiv (this.safeString (market, 'takerFee', exchangeFee), '100');
             let limitPriceMin = undefined;
             let limitPriceMax = undefined;
             let precisionPrice = this.safeNumber (market, 'tickSize');
@@ -472,6 +493,7 @@ module.exports = class currencycom extends Exchange {
                 const filter = this.safeValue (filtersByType, 'MIN_NOTIONAL', {});
                 costMin = this.safeNumber (filter, 'minNotional');
             }
+            const isContract = swap || futures;
             result.push ({
                 'id': id,
                 'symbol': symbol,
@@ -484,15 +506,15 @@ module.exports = class currencycom extends Exchange {
                 'type': type,
                 'spot': spot,
                 'margin': margin,
-                'swap': false,
-                'future': false,
+                'swap': swap,
+                'future': futures,
                 'option': false,
                 'active': active,
-                'contract': false,
-                'linear': undefined,
+                'contract': isContract,
+                'linear': isContract ? true : undefined,
                 'inverse': undefined,
-                'taker': this.parseNumber (taker),
-                'maker': this.parseNumber (maker),
+                'taker': this.parseNumber (takerFee),
+                'maker': this.parseNumber (makerFee),
                 'contractSize': undefined,
                 'expiry': undefined,
                 'expiryDatetime': undefined,
@@ -542,7 +564,7 @@ module.exports = class currencycom extends Exchange {
         //                 "accountId": "120702016179403605",
         //                 "collateralCurrency": false,
         //                 "asset": "CAKE",
-        //                 "free": "1.784",
+        //                 "free": "3.1",
         //                 "locked": "0.0",
         //                 "default": false,
         //             },
@@ -550,7 +572,7 @@ module.exports = class currencycom extends Exchange {
         //                 "accountId": "109698017713125316",
         //                 "collateralCurrency": true,
         //                 "asset": "USD",
-        //                 "free": "7.58632",
+        //                 "free": "17.58632",
         //                 "locked": "0.0",
         //                 "default": true,
         //             }
@@ -568,7 +590,7 @@ module.exports = class currencycom extends Exchange {
                 'id': accountId,
                 'type': undefined,
                 'currency': currencyCode,
-                'info': response,
+                'info': account,
             });
         }
         return result;
@@ -577,11 +599,35 @@ module.exports = class currencycom extends Exchange {
     async fetchTradingFees (params = {}) {
         await this.loadMarkets ();
         const response = await this.privateGetV2Account (params);
-        return {
-            'info': response,
-            'maker': this.safeNumber (response, 'makerCommission'),
-            'taker': this.safeNumber (response, 'takerCommission'),
-        };
+        //
+        //    {
+        //        makerCommission: '0.20',
+        //        takerCommission: '0.20',
+        //        buyerCommission: '0.20',
+        //        sellerCommission: '0.20',
+        //        canTrade: true,
+        //        canWithdraw: true,
+        //        canDeposit: true,
+        //        updateTime: '1645738976',
+        //        userId: '-1924114235',
+        //        balances: []
+        //    }
+        //
+        const makerFee = this.safeNumber (response, 'makerCommission');
+        const takerFee = this.safeNumber (response, 'takerCommission');
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': makerFee,
+                'taker': takerFee,
+                'percentage': true,
+                'tierBased': false,
+            };
+        }
+        return result;
     }
 
     parseBalance (response, type = undefined) {
@@ -910,14 +956,13 @@ module.exports = class currencycom extends Exchange {
         const id = this.safeString2 (trade, 'a', 'id');
         let side = undefined;
         const orderId = this.safeString (trade, 'orderId');
+        let takerOrMaker = undefined;
         if ('m' in trade) {
-            side = trade['m'] ? 'sell' : 'buy'; // this is reversed intentionally
-        } else if ('isBuyerMaker' in trade) {
-            side = trade['isBuyerMaker'] ? 'sell' : 'buy';
-        } else {
-            if ('isBuyer' in trade) {
-                side = (trade['isBuyer']) ? 'buy' : 'sell'; // this is a true side
-            }
+            side = trade['m'] ? 'sell' : 'buy'; // this is reversed intentionally [TODO: needs reason to be mentioned]
+            takerOrMaker = 'taker'; // in public trades, it's always taker
+        } else if ('isBuyer' in trade) {
+            side = (trade['isBuyer']) ? 'buy' : 'sell'; // this is a true side
+            takerOrMaker = trade['isMaker'] ? 'maker' : 'taker';
         }
         let fee = undefined;
         if ('commission' in trade) {
@@ -926,19 +971,14 @@ module.exports = class currencycom extends Exchange {
                 'currency': this.safeCurrencyCode (this.safeString (trade, 'commissionAsset')),
             };
         }
-        let takerOrMaker = undefined;
-        if ('isMaker' in trade) {
-            takerOrMaker = trade['isMaker'] ? 'maker' : 'taker';
-        }
         const marketId = this.safeString (trade, 'symbol');
         const symbol = this.safeSymbol (marketId, market);
         return this.safeTrade ({
-            'info': trade,
+            'id': id,
+            'order': orderId,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
             'symbol': symbol,
-            'id': id,
-            'order': orderId,
             'type': undefined,
             'takerOrMaker': takerOrMaker,
             'side': side,
@@ -946,6 +986,7 @@ module.exports = class currencycom extends Exchange {
             'amount': amountString,
             'cost': undefined,
             'fee': fee,
+            'info': trade,
         }, market);
     }
 
@@ -977,61 +1018,93 @@ module.exports = class currencycom extends Exchange {
         return this.parseTrades (response, market, since, limit);
     }
 
-    parseOrderStatus (status) {
-        const statuses = {
-            'NEW': 'open',
-            'PARTIALLY_FILLED': 'open',
-            'FILLED': 'closed',
-            'CANCELED': 'canceled',
-            'PENDING_CANCEL': 'canceling', // currently unused
-            'REJECTED': 'rejected',
-            'EXPIRED': 'expired',
-        };
-        return this.safeString (statuses, status, status);
-    }
-
     parseOrder (order, market = undefined) {
+        //
+        // createOrder
+        //
+        // limit
         //
         //     {
         //         "symbol": "BTC/USD",
-        //         "orderId": "00000000-0000-0000-0000-0000000c0263",
-        //         "clientOrderId": "00000000-0000-0000-0000-0000000c0263",
-        //         "transactTime": 1589878206426,
-        //         "price": "9825.66210000",
-        //         "origQty": "0.01",
-        //         "executedQty": "0.01",
+        //         "orderId": "00000000-0000-0000-0000-000006eacaa0",
+        //         "transactTime": "1645281669295",
+        //         "price": "30000.00000000",
+        //         "origQty": "0.0002",
+        //         "executedQty": "0.0",  // positive for BUY, negative for SELL
+        //         "status": "NEW",
+        //         "timeInForce": "GTC",
+        //         "type": "LIMIT",
+        //         "side": "BUY",
+        //     }
+        //
+        // market
+        //
+        //     {
+        //         "symbol": "DOGE/USD",
+        //         "orderId": "00000000-0000-0000-0000-000006eab2ad",
+        //         "transactTime": "1645283022252",
+        //         "price": "0.14066000",
+        //         "origQty": "40",
+        //         "executedQty": "40.0",  // positive for BUY, negative for SELL
         //         "status": "FILLED",
         //         "timeInForce": "FOK",
         //         "type": "MARKET",
-        //         "side": "BUY",
+        //         "side": "SELL",
         //         "fills": [
         //             {
-        //                 "price": "9807.05",
-        //                 "qty": "0.01",
+        //                 "price": "0.14094",
+        //                 "qty": "40.0",
         //                 "commission": "0",
-        //                 "commissionAsset": "dUSD"
-        //             }
-        //         ]
+        //                 "commissionAsset": "dUSD",
+        //             },
+        //         ],
         //     }
         //
-        const status = this.parseOrderStatus (this.safeString (order, 'status'));
+        // cancelOrder
+        //
+        //     {
+        //         "symbol": "DOGE/USD",
+        //         "orderId": "00000000-0000-0003-0000-000006db714c",
+        //         "price": "0.13",
+        //         "origQty": "30.0",
+        //         "executedQty": "0.0",
+        //         "status": "CANCELED",
+        //         "timeInForce": "GTC",
+        //         "type": "LIMIT",
+        //         "side": "BUY",
+        //     }
+        //
+        // fetchOpenOrders
+        //
+        //   {
+        //       "symbol": "DOGE/USD",
+        //       "orderId": "00000000-0000-0003-0000-000004bcc27a",
+        //       "price": "0.13",
+        //       "origQty": "39.0",
+        //       "executedQty": "0.0",
+        //       "status": "NEW",
+        //       "timeInForce": "GTC",
+        //       "type": "LIMIT",
+        //       "side": "BUY",
+        //       "time": "1645284216240",
+        //       "updateTime": "1645284216240",
+        //       "leverage": false, // whether it's swap or not
+        //       "working": true,
+        //   }
+        //
         const marketId = this.safeString (order, 'symbol');
         const symbol = this.safeSymbol (marketId, market, '/');
-        let timestamp = undefined;
-        if ('time' in order) {
-            timestamp = this.safeInteger (order, 'time');
-        } else if ('transactTime' in order) {
-            timestamp = this.safeInteger (order, 'transactTime');
-        }
+        const id = this.safeString (order, 'orderId');
         const price = this.safeString (order, 'price');
         const amount = this.safeString (order, 'origQty');
-        const filled = Precise.stringAbs (this.safeString (order, 'executedQty'));
-        const cost = this.safeString (order, 'cummulativeQuoteQty');
-        const id = this.safeString (order, 'orderId');
-        const type = this.safeStringLower (order, 'type');
-        const side = this.safeStringLower (order, 'side');
+        const filledRaw = this.safeString (order, 'executedQty');
+        const filled = Precise.stringAbs (filledRaw);
+        const status = this.parseOrderStatus (this.safeString (order, 'status'));
+        const timeInForce = this.parseOrderTimeInForce (this.safeString (order, 'timeInForce'));
+        const type = this.parseOrderType (this.safeString (order, 'type'));
+        const side = this.parseOrderSide (this.safeString (order, 'side'));
+        const timestamp = this.safeInteger2 (order, 'time', 'transactTime');
         const fills = this.safeValue (order, 'fills');
-        const timeInForce = this.safeString (order, 'timeInForce');
         return this.safeOrder ({
             'info': order,
             'id': id,
@@ -1045,7 +1118,7 @@ module.exports = class currencycom extends Exchange {
             'price': price,
             'stopPrice': undefined,
             'amount': amount,
-            'cost': cost,
+            'cost': undefined,
             'average': undefined,
             'filled': filled,
             'remaining': undefined,
@@ -1055,35 +1128,90 @@ module.exports = class currencycom extends Exchange {
         }, market);
     }
 
+    parseOrderStatus (status) {
+        const statuses = {
+            'NEW': 'open',
+            'PARTIALLY_FILLED': 'open',
+            'FILLED': 'closed',
+            'CANCELED': 'canceled',
+            'PENDING_CANCEL': 'canceling',
+            'REJECTED': 'rejected',
+            'EXPIRED': 'expired',
+        };
+        return this.safeString (statuses, status, status);
+    }
+
+    parseOrderType (status) {
+        const statuses = {
+            'MARKET': 'market',
+            'LIMIT': 'limit',
+            'STOP': 'stop',
+            // temporarily we remove custom mappings
+            // 'LIMIT_MAKER': '',
+            // 'STOP_LOSS': 'stop-loss',
+            // 'STOP_LOSS_LIMIT': 'stop-limit',
+            // 'TAKE_PROFIT': 'take-profit',
+            // 'TAKE_PROFIT_LIMIT': 'take-profit',
+        };
+        return this.safeString (statuses, status, status);
+    }
+
+    parseOrderTimeInForce (status) {
+        const statuses = {
+            'GTC': 'GTC',
+            'FOK': 'FOK',
+            'IOC': 'IOC',
+        };
+        return this.safeString (statuses, status, status);
+    }
+
+    parseOrderSide (status) {
+        const statuses = {
+            'BUY': 'buy',
+            'SELL': 'sell',
+        };
+        return this.safeString (statuses, status, status);
+    }
+
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         await this.loadMarkets ();
         const market = this.market (symbol);
         let accountId = undefined;
         if (market['margin']) {
-            accountId = this.safeInteger (params, 'accountId');
+            accountId = this.safeString (this.options, 'accountId');
+            accountId = this.safeString (params, 'accountId', accountId);
             if (accountId === undefined) {
-                throw new ArgumentsRequired (this.id + ' createOrder() requires an accountId parameter for ' + market['type'] + ' market ' + symbol);
+                throw new ArgumentsRequired (this.id + " createOrder() requires an accountId parameter or an exchange.options['accountId'] option for " + market['type'] + ' markets');
             }
         }
-        const uppercaseType = type.toUpperCase ();
         const newOrderRespType = this.safeValue (this.options['newOrderRespType'], type, 'RESULT');
         const request = {
             'symbol': market['id'],
             'quantity': this.amountToPrecision (symbol, amount),
-            'type': uppercaseType,
+            'type': type.toUpperCase (),
             'side': side.toUpperCase (),
             'newOrderRespType': newOrderRespType, // 'RESULT' for full order or 'FULL' for order with fills
             // 'leverage': 1,
             // 'accountId': 5470306579272968, // required for leverage markets
             // 'takeProfit': '123.45',
-            // 'stopLoss': '54.321'
+            // 'stopLoss': '54.321',
             // 'guaranteedStopLoss': '54.321',
         };
         if (type === 'limit') {
             request['price'] = this.priceToPrecision (symbol, price);
-            request['timeInForce'] = this.options['defaultTimeInForce']; // 'GTC' = Good To Cancel (default), 'IOC' = Immediate Or Cancel, 'FOK' = Fill Or Kill
-        } else if (type === 'stop') {
-            request['price'] = this.priceToPrecision (symbol, price);
+            request['timeInForce'] = this.options['defaultTimeInForce'];
+        } else {
+            if (type === 'stop') {
+                request['type'] = 'STOP';
+                request['price'] = this.priceToPrecision (symbol, price);
+            } else if (type === 'market') {
+                const stopPrice = this.safeNumber (params, 'stopPrice');
+                params = this.omit (params, 'stopPrice');
+                if (stopPrice !== undefined) {
+                    request['type'] = 'STOP';
+                    request['price'] = this.priceToPrecision (symbol, stopPrice);
+                }
+            }
         }
         const response = await this.privatePostV2Order (this.extend (request, params));
         //
@@ -1095,7 +1223,7 @@ module.exports = class currencycom extends Exchange {
         //         "transactTime": "1645281669295",
         //         "price": "30000.00000000",
         //         "origQty": "0.0002",
-        //         "executedQty": "0.0",  //positive for BUY, negative for SELL
+        //         "executedQty": "0.0",  // positive for BUY, negative for SELL
         //         "status": "NEW",
         //         "timeInForce": "GTC",
         //         "type": "LIMIT",
@@ -1110,19 +1238,19 @@ module.exports = class currencycom extends Exchange {
         //         "transactTime": "1645283022252",
         //         "price": "0.14066000",
         //         "origQty": "40",
-        //         "executedQty": "40.0",  //positive for BUY, negative for SELL
+        //         "executedQty": "40.0",  // positive for BUY, negative for SELL
         //         "status": "FILLED",
         //         "timeInForce": "FOK",
         //         "type": "MARKET",
-        //         "side": "SELL",
+        //         "side": "BUY",
         //         "fills": [
         //             {
         //                 "price": "0.14094",
         //                 "qty": "40.0",
         //                 "commission": "0",
-        //                 "commissionAsset": "dUSD",
-        //             },
-        //         ],
+        //                 "commissionAsset": "dUSD"
+        //             }
+        //         ]
         //     }
         //
         return this.parseOrder (response, market);
@@ -1149,7 +1277,7 @@ module.exports = class currencycom extends Exchange {
         //             "orderId": "00000000-0000-0003-0000-000004bac57a",
         //             "price": "0.13",
         //             "origQty": "39.0",
-        //             "executedQty": "0.0",
+        //             "executedQty": "0.0",  // positive for BUY, negative for SELL
         //             "status": "NEW",
         //             "timeInForce": "GTC",
         //             "type": "LIMIT",
@@ -1161,7 +1289,7 @@ module.exports = class currencycom extends Exchange {
         //         },
         //     ]
         //
-        return this.parseOrders (response, market, since, limit);
+        return this.parseOrders (response, market, since, limit, params);
     }
 
     async cancelOrder (id, symbol = undefined, params = {}) {
@@ -1184,16 +1312,15 @@ module.exports = class currencycom extends Exchange {
         const response = await this.privateDeleteV2Order (this.extend (request, params));
         //
         //     {
-        //         "symbol":"ETH/USD",
-        //         "orderId":"00000000-0000-0000-0000-00000024383b",
-        //         "clientOrderId":"00000000-0000-0000-0000-00000024383b", // this might not be present
-        //         "price":"150",
-        //         "origQty":"0.1",
-        //         "executedQty":"0.0",
-        //         "status":"CANCELED",
-        //         "timeInForce":"GTC",
-        //         "type":"LIMIT",
-        //         "side":"BUY"
+        //         "symbol": "DOGE/USD",
+        //         "orderId": "00000000-0000-0003-0000-000006db764c",
+        //         "price": "0.13",
+        //         "origQty": "30.0",
+        //         "executedQty": "0.0",  // positive for BUY, negative for SELL
+        //         "status": "CANCELED",
+        //         "timeInForce": "GTC",
+        //         "type": "LIMIT",
+        //         "side": "BUY",
         //     }
         //
         return this.parseOrder (response, market);
@@ -1234,15 +1361,15 @@ module.exports = class currencycom extends Exchange {
     }
 
     async fetchDeposits (code = undefined, since = undefined, limit = undefined, params = {}) {
-        return this.fetchTransactionsByMethod ('privateGetV2Deposits', code, since, limit, params);
+        return await this.fetchTransactionsByMethod ('privateGetV2Deposits', code, since, limit, params);
     }
 
     async fetchWithdrawals (code = undefined, since = undefined, limit = undefined, params = {}) {
-        return this.fetchTransactionsByMethod ('privateGetV2Withdrawals', code, since, limit, params);
+        return await this.fetchTransactionsByMethod ('privateGetV2Withdrawals', code, since, limit, params);
     }
 
     async fetchTransactions (code = undefined, since = undefined, limit = undefined, params = {}) {
-        return this.fetchTransactionsByMethod ('privateGetV2Transactions', code, since, limit, params);
+        return await this.fetchTransactionsByMethod ('privateGetV2Transactions', code, since, limit, params);
     }
 
     async fetchTransactionsByMethod (method, code = undefined, since = undefined, limit = undefined, params = {}) {
@@ -1332,6 +1459,101 @@ module.exports = class currencycom extends Exchange {
         return this.safeString (types, type, type);
     }
 
+    async fetchLedger (code = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        const request = {};
+        let currency = undefined;
+        if (code !== undefined) {
+            currency = this.currency (code);
+        }
+        if (since !== undefined) {
+            request['startTime'] = since;
+        }
+        if (limit !== undefined) {
+            request['limit'] = limit;
+        }
+        const response = await this.privateGetV2Ledger (this.extend (request, params));
+        // in the below example, first item expresses withdrawal/deposit type, second example expresses trade
+        //
+        // [
+        //     {
+        //       "id": "619031398",
+        //       "balance": "0.0",
+        //       "amount": "-1.088",
+        //       "currency": "CAKE",
+        //       "type": "withdrawal",
+        //       "timestamp": "1645460496425",
+        //       "commission": "0.13",
+        //       "paymentMethod": "BLOCKCHAIN", // present in withdrawal/deposit
+        //       "blockchainTransactionHash": "0x400ac905557c3d34638b1c60eba110b3ee0f97f4eb0f7318015ab76e7f16b7d6", // present in withdrawal/deposit
+        //       "status": "PROCESSED"
+        //     },
+        //     {
+        //       "id": "619031034",
+        //       "balance": "8.17223588",
+        //       "amount": "-0.01326294",
+        //       "currency": "USD",
+        //       "type": "exchange_commission",
+        //       "timestamp": "1645460461235",
+        //       "commission": "0.01326294",
+        //       "status": "PROCESSED"
+        //     },
+        // ]
+        //
+        return this.parseLedger (response, currency, since, limit);
+    }
+
+    parseLedgerEntry (item, currency = undefined) {
+        const id = this.safeString (item, 'id');
+        const amountString = this.safeString (item, 'amount');
+        const amount = Precise.stringAbs (amountString);
+        const timestamp = this.safeInteger (item, 'timestamp');
+        const currencyId = this.safeString (item, 'currency');
+        const code = this.safeCurrencyCode (currencyId, currency);
+        const feeCost = this.safeString (item, 'commission');
+        let fee = undefined;
+        if (feeCost !== undefined) {
+            fee = { 'currency': code, 'cost': feeCost };
+        }
+        const direction = Precise.stringLt (amountString, '0') ? 'out' : 'in';
+        const result = {
+            'id': id,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'direction': direction,
+            'account': undefined,
+            'referenceId': this.safeString (item, 'blockchainTransactionHash'),
+            'referenceAccount': undefined,
+            'type': this.parseLedgerEntryType (this.safeString (item, 'type')),
+            'currency': code,
+            'amount': amount,
+            'before': undefined,
+            'after': this.safeString (item, 'balance'),
+            'status': this.parseLedgerEntryStatus (this.safeString (item, 'status')),
+            'fee': fee,
+            'info': item,
+        };
+        return result;
+    }
+
+    parseLedgerEntryStatus (status) {
+        const statuses = {
+            'APPROVAL': 'pending',
+            'PROCESSED': 'ok',
+            'CANCELLED': 'canceled',
+        };
+        return this.safeString (statuses, status, status);
+    }
+
+    parseLedgerEntryType (type) {
+        const types = {
+            'deposit': 'transaction',
+            'withdrawal': 'transaction',
+            'exchange_commission': 'fee',
+        };
+        return this.safeString (types, type, type);
+    }
+
     async fetchLeverage (symbol, params = {}) {
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -1403,7 +1625,93 @@ module.exports = class currencycom extends Exchange {
                 url += '?' + this.urlencode (params);
             }
         }
+        url = this.implodeHostname (url);
         return { 'url': url, 'method': method, 'body': body, 'headers': headers };
+    }
+
+    async fetchPositions (symbols = undefined, params = {}) {
+        await this.loadMarkets ();
+        const response = await this.privateGetV2TradingPositions (params);
+        //
+        // {
+        //     "positions": [
+        //       {
+        //         "accountId": "109698017416453793",
+        //         "id": "00a18490-0079-54c4-0000-0000803e73d3",
+        //         "instrumentId": "45463225268524228",
+        //         "orderId": "00a18490-0079-54c4-0000-0000803e73d2",
+        //         "openQuantity": "13.6",
+        //         "openPrice": "0.75724",
+        //         "closeQuantity": "0.0",
+        //         "closePrice": "0",
+        //         "rpl": "-0.007723848",
+        //         "rplConverted": "0",
+        //         "upl": "-0.006664",
+        //         "uplConverted": "-0.006664",
+        //         "swap": "0",
+        //         "swapConverted": "0",
+        //         "fee": "-0.007723848",
+        //         "dividend": "0",
+        //         "margin": "0.2",
+        //         "state": "ACTIVE",
+        //         "currency": "USD",
+        //         "createdTimestamp": "1645473877236",
+        //         "openTimestamp": "1645473877193",
+        //         "type": "NET",
+        //         "cost": "2.0583600",
+        //         "symbol": "XRP/USD_LEVERAGE"
+        //       }
+        //     ]
+        // }
+        //
+        const data = this.safeValue (response, 'positions', []);
+        return this.parsePositions (data);
+    }
+
+    parsePositions (positions) {
+        const result = [];
+        for (let i = 0; i < positions.length; i++) {
+            result.push (this.parsePosition (positions[i]));
+        }
+        return result;
+    }
+
+    parsePosition (position, market = undefined) {
+        market = this.safeMarket (this.safeString (position, 'symbol'), market);
+        const symbol = market['symbol'];
+        const timestamp = this.safeNumber (position, 'createdTimestamp');
+        const quantityRaw = this.safeString (position, 'openQuantity');
+        const side = Precise.stringGt (quantityRaw, '0') ? 'long' : 'short';
+        const quantity = Precise.stringAbs (quantityRaw);
+        const entryPrice = this.safeNumber (position, 'openPrice');
+        const unrealizedProfit = this.safeNumber (position, 'upl');
+        const marginCoeff = this.safeString (position, 'margin');
+        const leverage = Precise.stringDiv ('1', marginCoeff);
+        return {
+            'symbol': symbol,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'contracts': this.parseNumber (quantity),
+            'contractSize': undefined,
+            'entryPrice': entryPrice,
+            'collateral': undefined,
+            'side': side,
+            // 'realizedProfit': this.safeNumber (position, 'rpl'),
+            'unrealizedProfit': unrealizedProfit,
+            'leverage': leverage,
+            'percentage': undefined,
+            'marginMode': undefined,
+            'marginType': undefined, // deprecated
+            'notional': undefined,
+            'markPrice': undefined,
+            'liquidationPrice': undefined,
+            'initialMargin': undefined,
+            'initialMarginPercentage': undefined,
+            'maintenanceMargin': this.parseNumber (marginCoeff),
+            'maintenanceMarginPercentage': undefined,
+            'marginRatio': undefined,
+            'info': position,
+        };
     }
 
     handleErrors (httpCode, reason, url, method, headers, body, response, requestHeaders, requestBody) {

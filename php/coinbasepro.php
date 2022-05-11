@@ -33,7 +33,9 @@ class coinbasepro extends Exchange {
                 'cancelOrder' => true,
                 'createDepositAddress' => true,
                 'createOrder' => true,
-                'deposit' => true,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'fetchAccounts' => true,
                 'fetchBalance' => true,
                 'fetchClosedOrders' => true,
@@ -53,6 +55,8 @@ class coinbasepro extends Exchange {
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => true,
                 'fetchTransactions' => true,
                 'fetchWithdrawals' => true,
                 'withdraw' => true,
@@ -170,8 +174,8 @@ class coinbasepro extends Exchange {
                 'trading' => array(
                     'tierBased' => true, // complicated tier system per coin
                     'percentage' => true,
-                    'maker' => 0.5 / 100, // highest fee of all tiers
-                    'taker' => 0.5 / 100, // highest fee of all tiers
+                    'maker' => 0.4 / 100, // highest fee of all tiers
+                    'taker' => 0.6 / 100, // highest fee of all tiers
                 ),
                 'funding' => array(
                     'tierBased' => false,
@@ -718,6 +722,33 @@ class coinbasepro extends Exchange {
         return $this->parse_trades($response, $market, $since, $limit);
     }
 
+    public function fetch_trading_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->privateGetFees ($params);
+        //
+        //    {
+        //        "maker_fee_rate" => "0.0050",
+        //        "taker_fee_rate" => "0.0050",
+        //        "usd_volume" => "43806.92"
+        //    }
+        //
+        $maker = $this->safe_number($response, 'maker_fee_rate');
+        $taker = $this->safe_number($response, 'taker_fee_rate');
+        $result = array();
+        for ($i = 0; $i < count($this->symbols); $i++) {
+            $symbol = $this->symbols[$i];
+            $result[$symbol] = array(
+                'info' => $response,
+                'symbol' => $symbol,
+                'maker' => $maker,
+                'taker' => $taker,
+                'percentage' => true,
+                'tierBased' => true,
+            );
+        }
+        return $result;
+    }
+
     public function parse_ohlcv($ohlcv, $market = null) {
         //
         //     array(
@@ -1045,6 +1076,14 @@ class coinbasepro extends Exchange {
     }
 
     public function deposit($code, $amount, $address, $params = array ()) {
+        /**
+         * Creates a new deposit $address, as required by coinbasepro
+         * @param {str} $code Unified CCXT $currency $code (e.g. `"USDT"`)
+         * @param {float} $amount The $amount of $currency to send in the deposit (e.g. `20`)
+         * @param {str} $address Not used by coinbasepro
+         * @param {dict} $params Parameters specific to the exchange API endpoint (e.g. `array("network" => "TRX")`)
+         * @return a {@link https://docs.ccxt.com/en/latest/manual.html#transaction-structure transaction structure}
+         */
         $this->load_markets();
         $currency = $this->currency($code);
         $request = array(
@@ -1099,10 +1138,7 @@ class coinbasepro extends Exchange {
         if (!$response) {
             throw new ExchangeError($this->id . ' withdraw() error => ' . $this->json($response));
         }
-        return array(
-            'info' => $response,
-            'id' => $response['id'],
-        );
+        return $this->parse_transaction($response, $currency);
     }
 
     public function parse_ledger_entry_type($type) {

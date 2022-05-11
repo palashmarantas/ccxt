@@ -49,7 +49,6 @@ class buda extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
@@ -65,11 +64,17 @@ class buda extends Exchange {
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
+                'fetchWithdrawal' => false,
                 'fetchWithdrawals' => true,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
+                'transfer' => false,
                 'withdraw' => true,
             ),
             'urls' => array(
@@ -785,7 +790,7 @@ class buda extends Exchange {
         yield $this->load_markets();
         $currency = $this->currency($code);
         if ($this->is_fiat($code)) {
-            throw new NotSupported($this->id . ' => fiat fetchDepositAddress() for ' . $code . ' is not supported');
+            throw new NotSupported($this->id . ' fetchDepositAddress() of fiat for ' . $code . ' is not supported');
         }
         $request = array(
             'currency' => $currency['id'],
@@ -853,7 +858,7 @@ class buda extends Exchange {
     public function fetch_deposits($code = null, $since = null, $limit = null, $params = array ()) {
         yield $this->load_markets();
         if ($code === null) {
-            throw new ArgumentsRequired($this->id . ' => fetchDeposits() requires a $currency $code argument');
+            throw new ArgumentsRequired($this->id . ' fetchDeposits() requires a $currency $code argument');
         }
         $currency = $this->currency($code);
         $request = array(
@@ -868,7 +873,7 @@ class buda extends Exchange {
     public function fetch_withdrawals($code = null, $since = null, $limit = null, $params = array ()) {
         yield $this->load_markets();
         if ($code === null) {
-            throw new ArgumentsRequired($this->id . ' => fetchDeposits() requires a $currency $code argument');
+            throw new ArgumentsRequired($this->id . ' fetchDeposits() requires a $currency $code argument');
         }
         $currency = $this->currency($code);
         $request = array(

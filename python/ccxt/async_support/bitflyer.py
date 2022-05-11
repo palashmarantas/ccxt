@@ -40,7 +40,12 @@ class bitflyer(Exchange):
                 'fetchPositions': True,
                 'fetchTicker': True,
                 'fetchTrades': True,
+                'fetchTradingFee': True,
+                'fetchTradingFees': False,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
                 'fetchWithdrawals': True,
+                'transfer': False,
                 'withdraw': True,
             },
             'urls': {
@@ -180,13 +185,23 @@ class bitflyer(Exchange):
                 quoteId = self.safe_string(currencies, 2)
             elif future:
                 alias = self.safe_string(market, 'alias')
-                splitAlias = alias.split('_')
-                currencyIds = self.safe_string(splitAlias, 0)
-                baseId = currencyIds[0:-3]
-                quoteId = currencyIds[-3:]
-                splitId = id.split(currencyIds)
-                expiryDate = self.safe_string(splitId, 1)
-                expiry = self.parse_expiry_date(expiryDate)
+                if alias is None:
+                    # no alias:
+                    # {product_code: 'BTCJPY11MAR2022', market_type: 'Futures'}
+                    # TODO self will break if there are products with 4 chars
+                    baseId = id[0:3]
+                    quoteId = id[3:6]
+                    # last 9 chars are expiry date
+                    expiryDate = id[-9:]
+                    expiry = self.parse_expiry_date(expiryDate)
+                else:
+                    splitAlias = alias.split('_')
+                    currencyIds = self.safe_string(splitAlias, 0)
+                    baseId = currencyIds[0:-3]
+                    quoteId = currencyIds[-3:]
+                    splitId = id.split(currencyIds)
+                    expiryDate = self.safe_string(splitId, 1)
+                    expiry = self.parse_expiry_date(expiryDate)
                 type = 'future'
             base = self.safe_currency_code(baseId)
             quote = self.safe_currency_code(quoteId)
@@ -399,6 +414,26 @@ class bitflyer(Exchange):
         response = await self.publicGetGetexecutions(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
 
+    async def fetch_trading_fee(self, symbol, params={}):
+        await self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'product_code': market['id'],
+        }
+        response = await self.privateGetGettradingcommission(self.extend(request, params))
+        #
+        #   {
+        #       commission_rate: '0.0020'
+        #   }
+        #
+        fee = self.safe_number(response, 'commission_rate')
+        return {
+            'info': response,
+            'symbol': symbol,
+            'maker': fee,
+            'taker': fee,
+        }
+
     async def create_order(self, symbol, type, side, amount, price=None, params={}):
         await self.load_markets()
         request = {
@@ -569,11 +604,12 @@ class bitflyer(Exchange):
             # 'bank_account_id': 1234,
         }
         response = await self.privatePostWithdraw(self.extend(request, params))
-        id = self.safe_string(response, 'message_id')
-        return {
-            'info': response,
-            'id': id,
-        }
+        #
+        #     {
+        #         "message_id": "69476620-5056-4003-bcbe-42658a2b041b"
+        #     }
+        #
+        return self.parse_transaction(response, currency)
 
     async def fetch_deposits(self, code=None, since=None, limit=None, params={}):
         await self.load_markets()
@@ -584,18 +620,20 @@ class bitflyer(Exchange):
         if limit is not None:
             request['count'] = limit  # default 100
         response = await self.privateGetGetcoinins(self.extend(request, params))
-        # [
-        #   {
-        #     "id": 100,
-        #     "order_id": "CDP20151227-024141-055555",
-        #     "currency_code": "BTC",
-        #     "amount": 0.00002,
-        #     "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
-        #     "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
-        #     "status": "COMPLETED",
-        #     "event_date": "2015-11-27T08:59:20.301"
-        #   }
-        # ]
+        #
+        #     [
+        #         {
+        #             "id": 100,
+        #             "order_id": "CDP20151227-024141-055555",
+        #             "currency_code": "BTC",
+        #             "amount": 0.00002,
+        #             "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
+        #             "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
+        #             "status": "COMPLETED",
+        #             "event_date": "2015-11-27T08:59:20.301"
+        #         }
+        #     ]
+        #
         return self.parse_transactions(response, currency, since, limit)
 
     async def fetch_withdrawals(self, code=None, since=None, limit=None, params={}):
@@ -608,20 +646,20 @@ class bitflyer(Exchange):
             request['count'] = limit  # default 100
         response = await self.privateGetGetcoinouts(self.extend(request, params))
         #
-        # [
-        #   {
-        #     "id": 500,
-        #     "order_id": "CWD20151224-014040-077777",
-        #     "currency_code": "BTC",
-        #     "amount": 0.1234,
-        #     "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-        #     "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
-        #     "fee": 0.0005,
-        #     "additional_fee": 0.0001,
-        #     "status": "COMPLETED",
-        #     "event_date": "2015-12-24T01:40:40.397"
-        #   }
-        # ]
+        #     [
+        #         {
+        #             "id": 500,
+        #             "order_id": "CWD20151224-014040-077777",
+        #             "currency_code": "BTC",
+        #             "amount": 0.1234,
+        #             "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        #             "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
+        #             "fee": 0.0005,
+        #             "additional_fee": 0.0001,
+        #             "status": "COMPLETED",
+        #             "event_date": "2015-12-24T01:40:40.397"
+        #         }
+        #     ]
         #
         return self.parse_transactions(response, currency, since, limit)
 
@@ -643,33 +681,39 @@ class bitflyer(Exchange):
         #
         # fetchDeposits
         #
-        #   {
-        #     "id": 100,
-        #     "order_id": "CDP20151227-024141-055555",
-        #     "currency_code": "BTC",
-        #     "amount": 0.00002,
-        #     "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
-        #     "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
-        #     "status": "COMPLETED",
-        #     "event_date": "2015-11-27T08:59:20.301"
-        #   }
+        #     {
+        #         "id": 100,
+        #         "order_id": "CDP20151227-024141-055555",
+        #         "currency_code": "BTC",
+        #         "amount": 0.00002,
+        #         "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
+        #         "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
+        #         "status": "COMPLETED",
+        #         "event_date": "2015-11-27T08:59:20.301"
+        #     }
         #
         # fetchWithdrawals
         #
-        #   {
-        #     "id": 500,
-        #     "order_id": "CWD20151224-014040-077777",
-        #     "currency_code": "BTC",
-        #     "amount": 0.1234,
-        #     "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-        #     "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
-        #     "fee": 0.0005,
-        #     "additional_fee": 0.0001,
-        #     "status": "COMPLETED",
-        #     "event_date": "2015-12-24T01:40:40.397"
-        #   }
+        #     {
+        #         "id": 500,
+        #         "order_id": "CWD20151224-014040-077777",
+        #         "currency_code": "BTC",
+        #         "amount": 0.1234,
+        #         "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        #         "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
+        #         "fee": 0.0005,
+        #         "additional_fee": 0.0001,
+        #         "status": "COMPLETED",
+        #         "event_date": "2015-12-24T01:40:40.397"
+        #     }
         #
-        id = self.safe_string(transaction, 'id')
+        # withdraw
+        #
+        #     {
+        #         "message_id": "69476620-5056-4003-bcbe-42658a2b041b"
+        #     }
+        #
+        id = self.safe_string_2(transaction, 'id', 'message_id')
         address = self.safe_string(transaction, 'address')
         currencyId = self.safe_string(transaction, 'currency_code')
         code = self.safe_currency_code(currencyId, currency)

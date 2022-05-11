@@ -36,16 +36,18 @@ class bitso extends Exchange {
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
                 'fetchDepositAddress' => true,
+                'fetchFundingFee' => false,
+                'fetchFundingFees' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchMarkets' => true,
                 'fetchMarkOHLCV' => false,
                 'fetchMyTrades' => true,
+                'fetchOHLCV' => true,
                 'fetchOpenOrders' => true,
                 'fetchOrder' => true,
                 'fetchOrderBook' => true,
@@ -56,10 +58,15 @@ class bitso extends Exchange {
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => true,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
+                'transfer' => false,
                 'withdraw' => true,
             ),
             'urls' => array(
@@ -79,6 +86,17 @@ class bitso extends Exchange {
                 ),
                 'defaultPrecision' => 0.00000001,
             ),
+            'timeframes' => array(
+                '1m' => '60',
+                '5m' => '300',
+                '15m' => '900',
+                '30m' => '1800',
+                '1h' => '3600',
+                '4h' => '14400',
+                '12h' => '43200',
+                '1d' => '86400',
+                '1w' => '604800',
+            ),
             'api' => array(
                 'public' => array(
                     'get' => array(
@@ -86,6 +104,7 @@ class bitso extends Exchange {
                         'ticker',
                         'order_book',
                         'trades',
+                        'ohlc',
                     ),
                 ),
                 'private' => array(
@@ -136,6 +155,7 @@ class bitso extends Exchange {
             'exceptions' => array(
                 '0201' => '\\ccxt\\AuthenticationError', // Invalid Nonce or Invalid Credentials
                 '104' => '\\ccxt\\InvalidNonce', // Cannot perform request - nonce must be higher than 1520307203724237
+                '0304' => '\\ccxt\\BadRequest', // array("success":false,"error":array("code":"0304","message":"The field time_bucket () is either invalid or missing"))
             ),
         ));
     }
@@ -407,6 +427,73 @@ class bitso extends Exchange {
         return $this->parse_ticker($ticker, $market);
     }
 
+    public function fetch_ohlcv($symbol, $timeframe = '1m', $since = null, $limit = null, $params = array ()) {
+        $this->load_markets();
+        $market = $this->market($symbol);
+        $request = array(
+            'book' => $market['id'],
+            'time_bucket' => $this->timeframes[$timeframe],
+        );
+        if ($since !== null) {
+            $request['start'] = $since;
+            if ($limit !== null) {
+                $duration = $this->parse_timeframe($timeframe);
+                $request['end'] = $this->sum($since, $duration * $limit * 1000);
+            }
+        } else if ($limit !== null) {
+            $now = $this->milliseconds();
+            $request['end'] = $now;
+            $request['start'] = $now - $this->parse_timeframe($timeframe) * 1000 * $limit;
+        }
+        $response = $this->publicGetOhlc (array_merge($request, $params));
+        //
+        //     {
+        //         "success":true,
+        //         "payload" => array(
+        //             array(
+        //                 "bucket_start_time":1648219140000,
+        //                 "first_trade_time":1648219154990,
+        //                 "last_trade_time":1648219189441,
+        //                 "first_rate":"44958.60",
+        //                 "last_rate":"44979.88",
+        //                 "min_rate":"44957.33",
+        //                 "max_rate":"44979.88",
+        //                 "trade_count":8,
+        //                 "volume":"0.00082814",
+        //                 "vwap":"44965.02"
+        //             ),
+        //         )
+        //     }
+        //
+        $payload = $this->safe_value($response, 'payload', array());
+        return $this->parse_ohlcvs($payload, $market, $timeframe, $since, $limit);
+    }
+
+    public function parse_ohlcv($ohlcv, $market = null, $timeframe = '1m') {
+        //
+        //     array(
+        //         "bucket_start_time":1648219140000,
+        //         "first_trade_time":1648219154990,
+        //         "last_trade_time":1648219189441,
+        //         "first_rate":"44958.60",
+        //         "last_rate":"44979.88",
+        //         "min_rate":"44957.33",
+        //         "max_rate":"44979.88",
+        //         "trade_count":8,
+        //         "volume":"0.00082814",
+        //         "vwap":"44965.02"
+        //     ),
+        //
+        return array(
+            $this->safe_integer($ohlcv, 'bucket_start_time'),
+            $this->safe_number($ohlcv, 'first_rate'),
+            $this->safe_number($ohlcv, 'max_rate'),
+            $this->safe_number($ohlcv, 'min_rate'),
+            $this->safe_number($ohlcv, 'last_rate'),
+            $this->safe_number($ohlcv, 'volume'),
+        );
+    }
+
     public function parse_trade($trade, $market = null) {
         //
         // fetchTrades (public)
@@ -515,6 +602,71 @@ class bitso extends Exchange {
         return $this->parse_trades($response['payload'], $market, $since, $limit);
     }
 
+    public function fetch_trading_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->privateGetFees ($params);
+        //
+        //    {
+        //        success => true,
+        //        $payload => {
+        //            $fees => array(
+        //                array(
+        //                    book => 'btc_mxn',
+        //                    fee_percent => '0.6500',
+        //                    fee_decimal => '0.00650000',
+        //                    taker_fee_percent => '0.6500',
+        //                    taker_fee_decimal => '0.00650000',
+        //                    maker_fee_percent => '0.5000',
+        //                    maker_fee_decimal => '0.00500000',
+        //                    volume_currency => 'mxn',
+        //                    current_volume => '0.00',
+        //                    next_volume => '1500000.00',
+        //                    next_maker_fee_percent => '0.490',
+        //                    next_taker_fee_percent => '0.637',
+        //                    nextVolume => '1500000.00',
+        //                    nextFee => '0.490',
+        //                    nextTakerFee => '0.637'
+        //                ),
+        //                ...
+        //            ),
+        //            deposit_fees => array(
+        //                array(
+        //                    currency => 'btc',
+        //                    method => 'rewards',
+        //                    $fee => '0.00',
+        //                    is_fixed => false
+        //                ),
+        //                ...
+        //            ),
+        //            withdrawal_fees => {
+        //                ada => '0.20958100',
+        //                bch => '0.00009437',
+        //                ars => '0',
+        //                btc => '0.00001209',
+        //                ...
+        //            }
+        //        }
+        //    }
+        //
+        $payload = $this->safe_value($response, 'payload', array());
+        $fees = $this->safe_value($payload, 'fees', array());
+        $result = array();
+        for ($i = 0; $i < count($fees); $i++) {
+            $fee = $fees[$i];
+            $marketId = $this->safe_string($fee, 'book');
+            $symbol = $this->safe_symbol($marketId, null, '_');
+            $result[$symbol] = array(
+                'info' => $fee,
+                'symbol' => $symbol,
+                'maker' => $this->safe_number($fee, 'maker_fee_decimal'),
+                'taker' => $this->safe_number($fee, 'taker_fee_decimal'),
+                'percentage' => true,
+                'tierBased' => true,
+            );
+        }
+        return $result;
+    }
+
     public function fetch_my_trades($symbol = null, $since = null, $limit = 25, $params = array ()) {
         $this->load_markets();
         $market = $this->market($symbol);
@@ -525,7 +677,7 @@ class bitso extends Exchange {
         // warn the user with an exception if the user wants to filter
         // starting from $since timestamp, but does not set the trade id with an extra 'marker' param
         if (($since !== null) && !$markerInParams) {
-            throw new ExchangeError($this->id . ' fetchMyTrades does not support fetching trades starting from a timestamp with the `$since` argument, use the `marker` extra param to filter starting from an integer trade id');
+            throw new ExchangeError($this->id . ' fetchMyTrades() does not support fetching trades starting from a timestamp with the `$since` argument, use the `marker` extra param to filter starting from an integer trade id');
         }
         // convert it to an integer unconditionally
         if ($markerInParams) {
@@ -625,7 +777,7 @@ class bitso extends Exchange {
         // warn the user with an exception if the user wants to filter
         // starting from $since timestamp, but does not set the trade id with an extra 'marker' param
         if (($since !== null) && !$markerInParams) {
-            throw new ExchangeError($this->id . ' fetchOpenOrders does not support fetching $orders starting from a timestamp with the `$since` argument, use the `marker` extra param to filter starting from an integer trade id');
+            throw new ExchangeError($this->id . ' fetchOpenOrders() does not support fetching $orders starting from a timestamp with the `$since` argument, use the `marker` extra param to filter starting from an integer trade id');
         }
         // convert it to an integer unconditionally
         if ($markerInParams) {
@@ -693,6 +845,76 @@ class bitso extends Exchange {
         );
     }
 
+    public function fetch_funding_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->privateGetFees ($params);
+        //
+        //    {
+        //        success => true,
+        //        $payload => {
+        //            fees => array(
+        //                array(
+        //                    book => 'btc_mxn',
+        //                    fee_percent => '0.6500',
+        //                    fee_decimal => '0.00650000',
+        //                    taker_fee_percent => '0.6500',
+        //                    taker_fee_decimal => '0.00650000',
+        //                    maker_fee_percent => '0.5000',
+        //                    maker_fee_decimal => '0.00500000',
+        //                    volume_currency => 'mxn',
+        //                    current_volume => '0.00',
+        //                    next_volume => '1500000.00',
+        //                    next_maker_fee_percent => '0.490',
+        //                    next_taker_fee_percent => '0.637',
+        //                    nextVolume => '1500000.00',
+        //                    nextFee => '0.490',
+        //                    nextTakerFee => '0.637'
+        //                ),
+        //                ...
+        //            ),
+        //            deposit_fees => array(
+        //                array(
+        //                    currency => 'btc',
+        //                    method => 'rewards',
+        //                    fee => '0.00',
+        //                    is_fixed => false
+        //                ),
+        //                ...
+        //            ),
+        //            withdrawal_fees => {
+        //                ada => '0.20958100',
+        //                bch => '0.00009437',
+        //                ars => '0',
+        //                btc => '0.00001209',
+        //                ...
+        //            }
+        //        }
+        //    }
+        //
+        $payload = $this->safe_value($response, 'payload', array());
+        $depositFees = $this->safe_value($payload, 'deposit_fees', array());
+        $deposit = array();
+        for ($i = 0; $i < count($depositFees); $i++) {
+            $depositFee = $depositFees[$i];
+            $currencyId = $this->safe_string($depositFee, 'currency');
+            $code = $this->safe_currency_code($currencyId);
+            $deposit[$code] = $this->safe_number($depositFee, 'fee');
+        }
+        $withdraw = array();
+        $withdrawalFees = $this->safe_value($payload, 'withdrawal_fees', array());
+        $currencyIds = is_array($withdrawalFees) ? array_keys($withdrawalFees) : array();
+        for ($i = 0; $i < count($currencyIds); $i++) {
+            $currencyId = $currencyIds[$i];
+            $code = $this->safe_currency_code($currencyId);
+            $withdraw[$code] = $this->safe_number($withdrawalFees, $currencyId);
+        }
+        return array(
+            'info' => $response,
+            'deposit' => $deposit,
+            'withdraw' => $withdraw,
+        );
+    }
+
     public function withdraw($code, $amount, $address, $tag = null, $params = array ()) {
         list($tag, $params) = $this->handle_withdraw_tag_and_params($tag, $params);
         $this->check_address($address);
@@ -704,6 +926,7 @@ class bitso extends Exchange {
             'BCH' => 'Bcash',
             'LTC' => 'Litecoin',
         );
+        $currency = $this->currency($code);
         $method = (is_array($methods) && array_key_exists($code, $methods)) ? $methods[$code] : null;
         if ($method === null) {
             throw new ExchangeError($this->id . ' not valid withdraw coin => ' . $code);
@@ -715,9 +938,68 @@ class bitso extends Exchange {
         );
         $classMethod = 'privatePost' . $method . 'Withdrawal';
         $response = $this->$classMethod (array_merge($request, $params));
+        //
+        //     {
+        //         "success" => true,
+        //         "payload" => array(
+        //             {
+        //                 "wid" => "c5b8d7f0768ee91d3b33bee648318688",
+        //                 "status" => "pending",
+        //                 "created_at" => "2016-04-08T17:52:31.000+00:00",
+        //                 "currency" => "btc",
+        //                 "method" => "Bitcoin",
+        //                 "amount" => "0.48650929",
+        //                 "details" => array(
+        //                     "withdrawal_address" => "18MsnATiNiKLqUHDTRKjurwMg7inCrdNEp",
+        //                     "tx_hash" => "d4f28394693e9fb5fffcaf730c11f32d1922e5837f76ca82189d3bfe30ded433"
+        //                 }
+        //             ),
+        //         )
+        //     }
+        //
+        $payload = $this->safe_value($response, 'payload', array());
+        $first = $this->safe_value($payload, 0);
+        return $this->parse_transaction($first, $currency);
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        // withdraw
+        //
+        //     {
+        //         "wid" => "c5b8d7f0768ee91d3b33bee648318688",
+        //         "status" => "pending",
+        //         "created_at" => "2016-04-08T17:52:31.000+00:00",
+        //         "currency" => "btc",
+        //         "method" => "Bitcoin",
+        //         "amount" => "0.48650929",
+        //         "details" => {
+        //             "withdrawal_address" => "18MsnATiNiKLqUHDTRKjurwMg7inCrdNEp",
+        //             "tx_hash" => "d4f28394693e9fb5fffcaf730c11f32d1922e5837f76ca82189d3bfe30ded433"
+        //         }
+        //     }
+        //
+        $currency = $this->safe_currency(null, $currency);
         return array(
-            'info' => $response,
-            'id' => $this->safe_string($response['payload'], 'wid'),
+            'id' => $this->safe_string($transaction, 'wid'),
+            'txid' => null,
+            'timestamp' => null,
+            'datetime' => null,
+            'network' => null,
+            'addressFrom' => null,
+            'address' => null,
+            'addressTo' => null,
+            'amount' => null,
+            'type' => null,
+            'currency' => $currency['code'],
+            'status' => null,
+            'updated' => null,
+            'tagFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'comment' => null,
+            'fee' => null,
+            'info' => $transaction,
         );
     }
 

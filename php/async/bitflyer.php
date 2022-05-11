@@ -41,7 +41,12 @@ class bitflyer extends Exchange {
                 'fetchPositions' => true,
                 'fetchTicker' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => true,
+                'fetchTradingFees' => false,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
                 'fetchWithdrawals' => true,
+                'transfer' => false,
                 'withdraw' => true,
             ),
             'urls' => array(
@@ -183,13 +188,24 @@ class bitflyer extends Exchange {
                 $quoteId = $this->safe_string($currencies, 2);
             } else if ($future) {
                 $alias = $this->safe_string($market, 'alias');
-                $splitAlias = explode('_', $alias);
-                $currencyIds = $this->safe_string($splitAlias, 0);
-                $baseId = mb_substr($currencyIds, 0, -3 - 0);
-                $quoteId = mb_substr($currencyIds, -3);
-                $splitId = explode($currencyIds, $id);
-                $expiryDate = $this->safe_string($splitId, 1);
-                $expiry = $this->parse_expiry_date($expiryDate);
+                if ($alias === null) {
+                    // no $alias:
+                    // array( product_code => 'BTCJPY11MAR2022', market_type => 'Futures' )
+                    // TODO this will break if there are products with 4 chars
+                    $baseId = mb_substr($id, 0, 3 - 0);
+                    $quoteId = mb_substr($id, 3, 6 - 3);
+                    // last 9 chars are $expiry date
+                    $expiryDate = mb_substr($id, -9);
+                    $expiry = $this->parse_expiry_date($expiryDate);
+                } else {
+                    $splitAlias = explode('_', $alias);
+                    $currencyIds = $this->safe_string($splitAlias, 0);
+                    $baseId = mb_substr($currencyIds, 0, -3 - 0);
+                    $quoteId = mb_substr($currencyIds, -3);
+                    $splitId = explode($currencyIds, $id);
+                    $expiryDate = $this->safe_string($splitId, 1);
+                    $expiry = $this->parse_expiry_date($expiryDate);
+                }
                 $type = 'future';
             }
             $base = $this->safe_currency_code($baseId);
@@ -420,6 +436,27 @@ class bitflyer extends Exchange {
         return $this->parse_trades($response, $market, $since, $limit);
     }
 
+    public function fetch_trading_fee($symbol, $params = array ()) {
+        yield $this->load_markets();
+        $market = $this->market($symbol);
+        $request = array(
+            'product_code' => $market['id'],
+        );
+        $response = yield $this->privateGetGettradingcommission (array_merge($request, $params));
+        //
+        //   {
+        //       commission_rate => '0.0020'
+        //   }
+        //
+        $fee = $this->safe_number($response, 'commission_rate');
+        return array(
+            'info' => $response,
+            'symbol' => $symbol,
+            'maker' => $fee,
+            'taker' => $fee,
+        );
+    }
+
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         yield $this->load_markets();
         $request = array(
@@ -610,11 +647,12 @@ class bitflyer extends Exchange {
             // 'bank_account_id' => 1234,
         );
         $response = yield $this->privatePostWithdraw (array_merge($request, $params));
-        $id = $this->safe_string($response, 'message_id');
-        return array(
-            'info' => $response,
-            'id' => $id,
-        );
+        //
+        //     {
+        //         "message_id" => "69476620-5056-4003-bcbe-42658a2b041b"
+        //     }
+        //
+        return $this->parse_transaction($response, $currency);
     }
 
     public function fetch_deposits($code = null, $since = null, $limit = null, $params = array ()) {
@@ -628,18 +666,20 @@ class bitflyer extends Exchange {
             $request['count'] = $limit; // default 100
         }
         $response = yield $this->privateGetGetcoinins (array_merge($request, $params));
-        // array(
-        //   {
-        //     "id" => 100,
-        //     "order_id" => "CDP20151227-024141-055555",
-        //     "currency_code" => "BTC",
-        //     "amount" => 0.00002,
-        //     "address" => "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
-        //     "tx_hash" => "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
-        //     "status" => "COMPLETED",
-        //     "event_date" => "2015-11-27T08:59:20.301"
-        //   }
-        // )
+        //
+        //     array(
+        //         {
+        //             "id" => 100,
+        //             "order_id" => "CDP20151227-024141-055555",
+        //             "currency_code" => "BTC",
+        //             "amount" => 0.00002,
+        //             "address" => "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
+        //             "tx_hash" => "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
+        //             "status" => "COMPLETED",
+        //             "event_date" => "2015-11-27T08:59:20.301"
+        //         }
+        //     )
+        //
         return $this->parse_transactions($response, $currency, $since, $limit);
     }
 
@@ -655,20 +695,20 @@ class bitflyer extends Exchange {
         }
         $response = yield $this->privateGetGetcoinouts (array_merge($request, $params));
         //
-        // array(
-        //   {
-        //     "id" => 500,
-        //     "order_id" => "CWD20151224-014040-077777",
-        //     "currency_code" => "BTC",
-        //     "amount" => 0.1234,
-        //     "address" => "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-        //     "tx_hash" => "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
-        //     "fee" => 0.0005,
-        //     "additional_fee" => 0.0001,
-        //     "status" => "COMPLETED",
-        //     "event_date" => "2015-12-24T01:40:40.397"
-        //   }
-        // )
+        //     array(
+        //         {
+        //             "id" => 500,
+        //             "order_id" => "CWD20151224-014040-077777",
+        //             "currency_code" => "BTC",
+        //             "amount" => 0.1234,
+        //             "address" => "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        //             "tx_hash" => "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
+        //             "fee" => 0.0005,
+        //             "additional_fee" => 0.0001,
+        //             "status" => "COMPLETED",
+        //             "event_date" => "2015-12-24T01:40:40.397"
+        //         }
+        //     )
         //
         return $this->parse_transactions($response, $currency, $since, $limit);
     }
@@ -693,33 +733,39 @@ class bitflyer extends Exchange {
         //
         // fetchDeposits
         //
-        //   {
-        //     "id" => 100,
-        //     "order_id" => "CDP20151227-024141-055555",
-        //     "currency_code" => "BTC",
-        //     "amount" => 0.00002,
-        //     "address" => "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
-        //     "tx_hash" => "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
-        //     "status" => "COMPLETED",
-        //     "event_date" => "2015-11-27T08:59:20.301"
-        //   }
+        //     {
+        //         "id" => 100,
+        //         "order_id" => "CDP20151227-024141-055555",
+        //         "currency_code" => "BTC",
+        //         "amount" => 0.00002,
+        //         "address" => "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
+        //         "tx_hash" => "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
+        //         "status" => "COMPLETED",
+        //         "event_date" => "2015-11-27T08:59:20.301"
+        //     }
         //
         // fetchWithdrawals
         //
-        //   {
-        //     "id" => 500,
-        //     "order_id" => "CWD20151224-014040-077777",
-        //     "currency_code" => "BTC",
-        //     "amount" => 0.1234,
-        //     "address" => "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-        //     "tx_hash" => "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
-        //     "fee" => 0.0005,
-        //     "additional_fee" => 0.0001,
-        //     "status" => "COMPLETED",
-        //     "event_date" => "2015-12-24T01:40:40.397"
-        //   }
+        //     {
+        //         "id" => 500,
+        //         "order_id" => "CWD20151224-014040-077777",
+        //         "currency_code" => "BTC",
+        //         "amount" => 0.1234,
+        //         "address" => "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        //         "tx_hash" => "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
+        //         "fee" => 0.0005,
+        //         "additional_fee" => 0.0001,
+        //         "status" => "COMPLETED",
+        //         "event_date" => "2015-12-24T01:40:40.397"
+        //     }
         //
-        $id = $this->safe_string($transaction, 'id');
+        // withdraw
+        //
+        //     {
+        //         "message_id" => "69476620-5056-4003-bcbe-42658a2b041b"
+        //     }
+        //
+        $id = $this->safe_string_2($transaction, 'id', 'message_id');
         $address = $this->safe_string($transaction, 'address');
         $currencyId = $this->safe_string($transaction, 'currency_code');
         $code = $this->safe_currency_code($currencyId, $currency);

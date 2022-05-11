@@ -29,6 +29,9 @@ module.exports = class bitrue extends Exchange {
                 'cancelAllOrders': false,
                 'cancelOrder': true,
                 'createOrder': true,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': true,
+                'createStopOrder': true,
                 'fetchBalance': true,
                 'fetchBidsAsks': true,
                 'fetchBorrowRate': false,
@@ -236,6 +239,9 @@ module.exports = class bitrue extends Exchange {
                     'ADA': 'Cardano',
                 },
             },
+            'commonCurrencies': {
+                'MIM': 'MIM Swarm',
+            },
             // https://binance-docs.github.io/apidocs/spot/en/#error-codes-2
             'exceptions': {
                 'exact': {
@@ -315,10 +321,10 @@ module.exports = class bitrue extends Exchange {
         return this.decimalToPrecision (cost, TRUNCATE, this.markets[symbol]['precision']['quote'], this.precisionMode, this.paddingMode);
     }
 
-    currencyToPrecision (currency, fee) {
+    currencyToPrecision (code, fee) {
         // info is available in currencies only if the user has configured his api keys
-        if (this.safeValue (this.currencies[currency], 'precision') !== undefined) {
-            return this.decimalToPrecision (fee, TRUNCATE, this.currencies[currency]['precision'], this.precisionMode, this.paddingMode);
+        if (this.safeValue (this.currencies[code], 'precision') !== undefined) {
+            return this.decimalToPrecision (fee, TRUNCATE, this.currencies[code]['precision'], this.precisionMode, this.paddingMode);
         } else {
             return this.numberToString (fee);
         }
@@ -330,14 +336,21 @@ module.exports = class bitrue extends Exchange {
 
     async fetchStatus (params = {}) {
         const response = await this.v1PublicGetPing (params);
+        //
+        // empty means working status.
+        //
+        //     {}
+        //
         const keys = Object.keys (response);
         const keysLength = keys.length;
         const formattedStatus = keysLength ? 'maintenance' : 'ok';
-        this.status = this.extend (this.status, {
+        return {
             'status': formattedStatus,
             'updated': this.milliseconds (),
-        });
-        return this.status;
+            'eta': undefined,
+            'url': undefined,
+            'info': response,
+        };
     }
 
     async fetchTime (params = {}) {
@@ -1224,7 +1237,7 @@ module.exports = class bitrue extends Exchange {
 
     async fetchOpenOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchOpenOrders requires a symbol argument');
+            throw new ArgumentsRequired (this.id + ' fetchOpenOrders() requires a symbol argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -1336,7 +1349,7 @@ module.exports = class bitrue extends Exchange {
 
     async fetchDeposits (code = undefined, since = undefined, limit = undefined, params = {}) {
         if (code === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchDeposits requires a code argument');
+            throw new ArgumentsRequired (this.id + ' fetchDeposits() requires a code argument');
         }
         await this.loadMarkets ();
         const currency = this.currency (code);
@@ -1398,7 +1411,7 @@ module.exports = class bitrue extends Exchange {
 
     async fetchWithdrawals (code = undefined, since = undefined, limit = undefined, params = {}) {
         if (code === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchWithdrawals requires a code argument');
+            throw new ArgumentsRequired (this.id + ' fetchWithdrawals() requires a code argument');
         }
         await this.loadMarkets ();
         const currency = this.currency (code);
@@ -1433,7 +1446,7 @@ module.exports = class bitrue extends Exchange {
         //     }
         //
         const data = this.safeValue (response, 'data', {});
-        return this.parseTransaction (data, currency);
+        return this.parseTransactions (data, currency);
     }
 
     parseTransactionStatusByType (status, type = undefined) {
@@ -1598,7 +1611,7 @@ module.exports = class bitrue extends Exchange {
             const networkEntry = this.safeValue (networks, network, {});
             chainName = this.safeString (networkEntry, 'id'); // handle ERC20>ETH alias
             if (chainName === undefined) {
-                throw new ArgumentsRequired (this.id + ' withdraw requires a network parameter or a chainName parameter');
+                throw new ArgumentsRequired (this.id + ' withdraw() requires a network parameter or a chainName parameter');
             }
             params = this.omit (params, 'network');
         }
@@ -1616,10 +1629,7 @@ module.exports = class bitrue extends Exchange {
         }
         const response = await this.v1PrivatePostWithdrawCommit (this.extend (request, params));
         //     { id: '9a67628b16ba4988ae20d329333f16bc' }
-        return {
-            'info': response,
-            'id': this.safeString (response, 'id'),
-        };
+        return this.parseTransaction (response, currency);
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {

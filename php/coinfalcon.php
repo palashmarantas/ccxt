@@ -34,13 +34,14 @@ class coinfalcon extends Exchange {
                 'fetchBorrowRateHistory' => false,
                 'fetchBorrowRates' => false,
                 'fetchBorrowRatesPerSymbol' => false,
+                'fetchDepositAddress' => true,
+                'fetchDepositAddresses' => false,
                 'fetchDeposits' => true,
                 'fetchFundingHistory' => false,
                 'fetchFundingRate' => false,
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
@@ -56,11 +57,16 @@ class coinfalcon extends Exchange {
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
+                'fetchTradinFee' => false,
+                'fetchTradingFees' => true,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
                 'fetchWithdrawals' => true,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
+                'transfer' => false,
                 'withdraw' => true,
             ),
             'urls' => array(
@@ -417,6 +423,38 @@ class coinfalcon extends Exchange {
         return $this->parse_trades($data, $market, $since, $limit);
     }
 
+    public function fetch_trading_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->privateGetUserFees ($params);
+        //
+        //    {
+        //        $data => {
+        //            maker_fee => '0.0',
+        //            taker_fee => '0.2',
+        //            btc_volume_30d => '0.0'
+        //        }
+        //    }
+        //
+        $data = $this->safe_value($response, 'data', array());
+        $makerString = $this->safe_string($data, 'maker_fee');
+        $takerString = $this->safe_string($data, 'taker_fee');
+        $maker = $this->parse_number(Precise::string_div($makerString, '100'));
+        $taker = $this->parse_number(Precise::string_div($takerString, '100'));
+        $result = array();
+        for ($i = 0; $i < count($this->symbols); $i++) {
+            $symbol = $this->symbols[$i];
+            $result[$symbol] = array(
+                'info' => $response,
+                'symbol' => $symbol,
+                'maker' => $maker,
+                'taker' => $taker,
+                'percentage' => true,
+                'tierBased' => true,
+            );
+        }
+        return $result;
+    }
+
     public function parse_balance($response) {
         $result = array( 'info' => $response );
         $balances = $this->safe_value($response, 'data');
@@ -437,6 +475,44 @@ class coinfalcon extends Exchange {
         $this->load_markets();
         $response = $this->privateGetUserAccounts ($params);
         return $this->parse_balance($response);
+    }
+
+    public function parse_deposit_address($depositAddress, $currency = null) {
+        //
+        //     {
+        //         "address":"0x77b5051f97efa9cc52c9ad5b023a53fc15c200d3",
+        //         "tag":"0"
+        //     }
+        //
+        $address = $this->safe_string($depositAddress, 'address');
+        $tag = $this->safe_string($depositAddress, 'tag');
+        $this->check_address($address);
+        return array(
+            'currency' => $this->safe_currency_code(null, $currency),
+            'address' => $address,
+            'tag' => $tag,
+            'network' => null,
+            'info' => $depositAddress,
+        );
+    }
+
+    public function fetch_deposit_address($code, $params = array ()) {
+        $this->load_markets();
+        $currency = $this->safe_currency($code);
+        $request = array(
+            'currency' => $this->safe_string_lower($currency, 'id'),
+        );
+        $response = $this->privateGetAccountDepositAddress (array_merge($request, $params));
+        //
+        //     {
+        //         $data => {
+        //             address => '0x9918987bbe865a1a9301dc736cf6cf3205956694',
+        //             tag:null
+        //         }
+        //     }
+        //
+        $data = $this->safe_value($response, 'data', array());
+        return $this->parse_deposit_address($data, $currency);
     }
 
     public function parse_order_status($status) {
@@ -577,7 +653,7 @@ class coinfalcon extends Exchange {
         $currency = null;
         if ($code !== null) {
             $currency = $this->currency($code);
-            $request['currency'] = strtolower($currency['id']);
+            $request['currency'] = $this->safe_string_lower($currency, 'id');
         }
         if ($since !== null) {
             $request['since_time'] = $this->iso8601($since);
@@ -614,7 +690,7 @@ class coinfalcon extends Exchange {
         $currency = null;
         if ($code !== null) {
             $currency = $this->currency($code);
-            $request['currency'] = strtolower($currency['id']);
+            $request['currency'] = $this->safe_string_lower($currency, 'id');
         }
         if ($since !== null) {
             $request['since_time'] = $this->iso8601($since);
@@ -646,7 +722,7 @@ class coinfalcon extends Exchange {
         $this->load_markets();
         $currency = $this->currency($code);
         $request = array(
-            'currency' => strtolower($currency['id']),
+            'currency' => $this->safeStingLower ($currency, 'id'),
             'address' => $address,
             'amount' => $amount,
             // 'tag' => 'string', // withdraw tag/memo

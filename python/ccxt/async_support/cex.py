@@ -4,17 +4,11 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.async_support.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 import json
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
+from ccxt.base.errors import BadSymbol
 from ccxt.base.errors import NullResponse
 from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
@@ -47,7 +41,9 @@ class cex(Exchange):
                 'fetchBalance': True,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
+                'fetchDeposit': False,
                 'fetchDepositAddress': True,
+                'fetchDeposits': False,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
                 'fetchFundingRateHistory': False,
@@ -64,6 +60,14 @@ class cex(Exchange):
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
+                'fetchWithdrawal': False,
+                'fetchWithdrawals': False,
+                'transfer': False,
+                'withdraw': False,
             },
             'timeframes': {
                 '1m': '1m',
@@ -160,6 +164,7 @@ class cex(Exchange):
                     'Invalid API key': AuthenticationError,
                     'There was an error while placing your order': InvalidOrder,
                     'Sorry, too many clients already': DDoSProtection,
+                    'Invalid Symbols Pair': BadSymbol,
                 },
             },
             'options': {
@@ -512,12 +517,13 @@ class cex(Exchange):
             'currencies': '/'.join(currencies),
         }
         response = await self.publicGetTickersCurrencies(self.extend(request, params))
-        tickers = response['data']
+        tickers = self.safe_value(response, 'data', [])
         result = {}
         for t in range(0, len(tickers)):
             ticker = tickers[t]
-            symbol = ticker['pair'].replace(':', '/')
-            market = self.markets[symbol]
+            marketId = self.safe_string(ticker, 'pair')
+            market = self.safe_market(marketId, None, ':')
+            symbol = market['symbol']
             result[symbol] = self.parse_ticker(ticker, market)
         return self.filter_by_array(result, 'symbol', symbols)
 
@@ -573,6 +579,39 @@ class cex(Exchange):
         }
         response = await self.publicGetTradeHistoryPair(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
+
+    async def fetch_trading_fees(self, params={}):
+        await self.load_markets()
+        response = await self.privatePostGetMyfee(params)
+        #
+        #      {
+        #          e: 'get_myfee',
+        #          ok: 'ok',
+        #          data: {
+        #            'BTC:USD': {buy: '0.25', sell: '0.25', buyMaker: '0.15', sellMaker: '0.15'},
+        #            'ETH:USD': {buy: '0.25', sell: '0.25', buyMaker: '0.15', sellMaker: '0.15'},
+        #            ..
+        #          }
+        #      }
+        #
+        data = self.safe_value(response, 'data', {})
+        result = {}
+        for i in range(0, len(self.symbols)):
+            symbol = self.symbols[i]
+            market = self.market(symbol)
+            fee = self.safe_value(data, market['id'], {})
+            makerString = self.safe_string(fee, 'buyMaker')
+            takerString = self.safe_string(fee, 'buy')
+            maker = self.parse_number(Precise.string_div(makerString, '100'))
+            taker = self.parse_number(Precise.string_div(takerString, '100'))
+            result[symbol] = {
+                'info': fee,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': True,
+            }
+        return result
 
     async def create_order(self, symbol, type, side, amount, price=None, params={}):
         # for market buy it requires the amount of quote currency to spend
@@ -644,7 +683,7 @@ class cex(Exchange):
         # Depending on the call, 'time' can be a unix int, unix string or ISO string
         # Yes, really
         timestamp = self.safe_value(order, 'time')
-        if isinstance(timestamp, basestring) and timestamp.find('T') >= 0:
+        if isinstance(timestamp, str) and timestamp.find('T') >= 0:
             # ISO8601 string
             timestamp = self.parse8601(timestamp)
         else:
@@ -1244,7 +1283,7 @@ class cex(Exchange):
     async def fetch_deposit_address(self, code, params={}):
         if code == 'XRP' or code == 'XLM':
             # https://github.com/ccxt/ccxt/pull/2327#issuecomment-375204856
-            raise NotSupported(self.id + ' fetchDepositAddress does not support XRP and XLM addresses yet(awaiting docs from CEX.io)')
+            raise NotSupported(self.id + ' fetchDepositAddress() does not support XRP and XLM addresses yet(awaiting docs from CEX.io)')
         await self.load_markets()
         currency = self.currency(code)
         request = {

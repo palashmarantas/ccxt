@@ -54,7 +54,7 @@ class bitfinex extends Exchange {
                 'fetchTickers' => true,
                 'fetchTime' => false,
                 'fetchTrades' => true,
-                'fetchTradingFee' => true,
+                'fetchTradingFee' => false,
                 'fetchTradingFees' => true,
                 'fetchTransactions' => true,
                 'fetchWithdrawals' => null,
@@ -234,6 +234,7 @@ class bitfinex extends Exchange {
                 'EDO' => 'PNT',
                 'EUS' => 'EURS',
                 'EUT' => 'EURT',
+                'IDX' => 'ID',
                 'IOT' => 'IOTA',
                 'IQX' => 'IQ',
                 'MNA' => 'MANA',
@@ -369,14 +370,18 @@ class bitfinex extends Exchange {
                     'limit' => 'exchange limit',
                     'market' => 'exchange market',
                 ),
+                'fiat' => array(
+                    'USD' => 'USD',
+                    'EUR' => 'EUR',
+                    'JPY' => 'JPY',
+                    'GBP' => 'GBP',
+                    'CNH' => 'CNH',
+                ),
                 'accountsByType' => array(
                     'spot' => 'exchange',
                     'margin' => 'trading',
                     'funding' => 'deposit',
-                    'exchange' => 'exchange',
-                    'trading' => 'trading',
-                    'deposit' => 'deposit',
-                    'derivatives' => 'trading',
+                    'swap' => 'trading',
                 ),
             ),
         ));
@@ -405,31 +410,73 @@ class bitfinex extends Exchange {
         $response = $this->privatePostSummary ($params);
         //
         //     {
-        //         time => '2019-02-20T15:50:19.152000Z',
-        //         trade_vol_30d => array(
-        //             {
-        //                 curr => 'Total (USD)',
-        //                 vol => 0,
-        //                 vol_maker => 0,
-        //                 vol_BFX => 0,
-        //                 vol_BFX_maker => 0,
-        //                 vol_ETHFX => 0,
-        //                 vol_ETHFX_maker => 0
-        //             }
-        //         ),
-        //         fees_funding_30d => array(),
-        //         fees_funding_total_30d => 0,
-        //         fees_trading_30d => array(),
-        //         fees_trading_total_30d => 0,
-        //         maker_fee => 0.001,
-        //         taker_fee => 0.002
+        //          time => '2022-02-23T16:05:47.659000Z',
+        //          status => array( resid_hint => null, login_last => '2022-02-23T16:05:48Z' ),
+        //          is_locked => false,
+        //          leo_lev => '0',
+        //          leo_amount_avg => '0.0',
+        //          trade_vol_30d => array(
+        //          {
+        //              curr => 'Total (USD)',
+        //              vol => '0.0',
+        //              vol_safe => '0.0',
+        //              vol_maker => '0.0',
+        //              vol_BFX => '0.0',
+        //              vol_BFX_safe => '0.0',
+        //              vol_BFX_maker => '0.0'
+        //          }
+        //          ),
+        //          fees_funding_30d => array(),
+        //          fees_funding_total_30d => '0',
+        //          fees_trading_30d => array(),
+        //          fees_trading_total_30d => '0',
+        //          rebates_trading_30d => array(),
+        //          rebates_trading_total_30d => '0',
+        //          maker_fee => '0.001',
+        //          taker_fee => '0.002',
+        //          maker_fee_2crypto => '0.001',
+        //          maker_fee_2stablecoin => '0.001',
+        //          maker_fee_2fiat => '0.001',
+        //          maker_fee_2deriv => '0.0002',
+        //          taker_fee_2crypto => '0.002',
+        //          taker_fee_2stablecoin => '0.002',
+        //          taker_fee_2fiat => '0.002',
+        //          taker_fee_2deriv => '0.00065',
+        //          deriv_maker_rebate => '0.0002',
+        //          deriv_taker_fee => '0.00065',
+        //          trade_last => null
         //     }
         //
-        return array(
-            'info' => $response,
-            'maker' => $this->safe_number($response, 'maker_fee'),
-            'taker' => $this->safe_number($response, 'taker_fee'),
-        );
+        $result = array();
+        $fiat = $this->safe_value($this->options, 'fiat', array());
+        $makerFee = $this->safe_number($response, 'maker_fee');
+        $takerFee = $this->safe_number($response, 'taker_fee');
+        $makerFee2Fiat = $this->safe_number($response, 'maker_fee_2fiat');
+        $takerFee2Fiat = $this->safe_number($response, 'taker_fee_2fiat');
+        $makerFee2Deriv = $this->safe_number($response, 'maker_fee_2deriv');
+        $takerFee2Deriv = $this->safe_number($response, 'taker_fee_2deriv');
+        for ($i = 0; $i < count($this->symbols); $i++) {
+            $symbol = $this->symbols[$i];
+            $market = $this->market($symbol);
+            $fee = array(
+                'info' => $response,
+                'symbol' => $symbol,
+                'percentage' => true,
+                'tierBased' => true,
+            );
+            if (is_array($fiat) && array_key_exists($market['quote'], $fiat)) {
+                $fee['maker'] = $makerFee2Fiat;
+                $fee['taker'] = $takerFee2Fiat;
+            } else if ($market['contract']) {
+                $fee['maker'] = $makerFee2Deriv;
+                $fee['taker'] = $takerFee2Deriv;
+            } else {
+                $fee['maker'] = $makerFee;
+                $fee['taker'] = $takerFee;
+            }
+            $result[$symbol] = $fee;
+        }
+        return $result;
     }
 
     public function fetch_markets($params = array ()) {
@@ -517,7 +564,7 @@ class bitfinex extends Exchange {
                         'max' => null,
                     ),
                     'cost' => array(
-                        'min' => $this->safe_number($market, 'minimum_margin'),
+                        'min' => null,
                         'max' => null,
                     ),
                 ),
@@ -547,10 +594,10 @@ class bitfinex extends Exchange {
         $this->load_markets();
         $accountsByType = $this->safe_value($this->options, 'accountsByType', array());
         $requestedType = $this->safe_string($params, 'type', 'exchange');
-        $accountType = $this->safe_string($accountsByType, $requestedType);
+        $accountType = $this->safe_string($accountsByType, $requestedType, $requestedType);
         if ($accountType === null) {
             $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' fetchBalance $type parameter must be one of ' . implode(', ', $keys));
+            throw new ExchangeError($this->id . ' fetchBalance() $type parameter must be one of ' . implode(', ', $keys));
         }
         $query = $this->omit($params, 'type');
         $response = $this->privatePostBalances ($query);
@@ -599,16 +646,8 @@ class bitfinex extends Exchange {
         // however we support it in CCXT (from just looking at web inspector)
         $this->load_markets();
         $accountsByType = $this->safe_value($this->options, 'accountsByType', array());
-        $fromId = $this->safe_string($accountsByType, $fromAccount);
-        if ($fromId === null) {
-            $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' transfer $fromAccount must be one of ' . implode(', ', $keys));
-        }
-        $toId = $this->safe_string($accountsByType, $toAccount);
-        if ($toId === null) {
-            $keys = is_array($accountsByType) ? array_keys($accountsByType) : array();
-            throw new ExchangeError($this->id . ' transfer $toAccount must be one of ' . implode(', ', $keys));
-        }
+        $fromId = $this->safe_string($accountsByType, $fromAccount, $fromAccount);
+        $toId = $this->safe_string($accountsByType, $toAccount, $toAccount);
         $currency = $this->currency($code);
         $fromCurrencyId = $this->convert_derivatives_id($currency['id'], $fromAccount);
         $toCurrencyId = $this->convert_derivatives_id($currency['id'], $toAccount);
@@ -621,33 +660,52 @@ class bitfinex extends Exchange {
             'walletto' => $toId,
         );
         $response = $this->privatePostTransfer (array_merge($request, $params));
-        // array(
-        //   {
-        //     $status => 'success',
-        //     $message => '0.0001 Bitcoin transfered from Margin to Exchange'
-        //   }
-        // )
+        //
+        //     array(
+        //         {
+        //             status => 'success',
+        //             $message => '0.0001 Bitcoin transfered from Margin to Exchange'
+        //         }
+        //     )
+        //
         $result = $this->safe_value($response, 0);
-        $status = $this->safe_string($result, 'status');
         $message = $this->safe_string($result, 'message');
         if ($message === null) {
             throw new ExchangeError($this->id . ' transfer failed');
         }
-        // [array("status":"error","message":"Momentary balance check. Please wait few seconds and try the transfer again.")]
-        if ($status === 'error') {
-            $this->throw_exactly_matched_exception($this->exceptions['exact'], $message, $this->id . ' ' . $message);
-            throw new ExchangeError($this->id . ' ' . $message);
-        }
-        return array(
-            'info' => $response,
-            'status' => $status,
-            'amount' => $requestedAmount,
-            'code' => $code,
+        return array_merge($this->parse_transfer($result, $currency), array(
             'fromAccount' => $fromAccount,
             'toAccount' => $toAccount,
-            'timestamp' => null,
-            'datetime' => null,
+            'amount' => $this->parse_number($requestedAmount),
+        ));
+    }
+
+    public function parse_transfer($transfer, $currency = null) {
+        //
+        //     {
+        //         status => 'success',
+        //         message => '0.0001 Bitcoin transfered from Margin to Exchange'
+        //     }
+        //
+        $timestamp = $this->milliseconds();
+        return array(
+            'info' => $transfer,
+            'id' => null,
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601($timestamp),
+            'currency' => $this->safe_currency_code(null, $currency),
+            'amount' => null,
+            'fromAccount' => null,
+            'toAccount' => null,
+            'status' => $this->parse_transfer_status($this->safe_string($transfer, 'status')),
         );
+    }
+
+    public function parse_transfer_status($status) {
+        $statuses = array(
+            'SUCCESS' => 'ok',
+        );
+        return $this->safe_string($statuses, $status, $status);
     }
 
     public function convert_derivatives_id($currencyId, $type) {
@@ -1190,6 +1248,14 @@ class bitfinex extends Exchange {
         //         "timestamp_created" => "1561716066.0"
         //     }
         //
+        // withdraw
+        //
+        //     {
+        //         "status":"success",
+        //         "message":"Your withdrawal request has been successfully submitted.",
+        //         "withdrawal_id":586829
+        //     }
+        //
         $timestamp = $this->safe_timestamp($transaction, 'timestamp_created');
         $updated = $this->safe_timestamp($transaction, 'timestamp');
         $currencyId = $this->safe_string($transaction, 'currency');
@@ -1203,7 +1269,7 @@ class bitfinex extends Exchange {
         $tag = $this->safe_string($transaction, 'description');
         return array(
             'info' => $transaction,
-            'id' => $this->safe_string($transaction, 'id'),
+            'id' => $this->safe_string_2($transaction, 'id', 'withdrawal_id'),
             'txid' => $this->safe_string($transaction, 'txid'),
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
@@ -1243,6 +1309,7 @@ class bitfinex extends Exchange {
         $this->load_markets();
         // todo rewrite for https://api-pub.bitfinex.com//v2/conf/pub:map:tx:method
         $name = $this->get_currency_name($code);
+        $currency = $this->currency($code);
         $request = array(
             'withdraw_type' => $name,
             'walletselected' => 'exchange',
@@ -1253,7 +1320,16 @@ class bitfinex extends Exchange {
             $request['payment_id'] = $tag;
         }
         $responses = $this->privatePostWithdraw (array_merge($request, $params));
-        $response = $responses[0];
+        //
+        //     array(
+        //         {
+        //             "status":"success",
+        //             "message":"Your withdrawal $request has been successfully submitted.",
+        //             "withdrawal_id":586829
+        //         }
+        //     )
+        //
+        $response = $this->safe_value($responses, 0, array());
         $id = $this->safe_string($response, 'withdrawal_id');
         $message = $this->safe_string($response, 'message');
         $errorMessage = $this->find_broadly_matched_key($this->exceptions['broad'], $message);
@@ -1264,10 +1340,7 @@ class bitfinex extends Exchange {
             }
             throw new ExchangeError($this->id . ' withdraw returned an $id of zero => ' . $this->json($response));
         }
-        return array(
-            'info' => $response,
-            'id' => $id,
-        );
+        return $this->parse_transaction($response, $currency);
     }
 
     public function fetch_positions($symbols = null, $params = array ()) {
@@ -1336,14 +1409,27 @@ class bitfinex extends Exchange {
         if ($response === null) {
             return;
         }
+        $throwError = false;
         if ($code >= 400) {
-            if ($body[0] === '{') {
-                $feedback = $this->id . ' ' . $body;
-                $message = $this->safe_string_2($response, 'message', 'error');
-                $this->throw_exactly_matched_exception($this->exceptions['exact'], $message, $feedback);
-                $this->throw_broadly_matched_exception($this->exceptions['broad'], $message, $feedback);
-                throw new ExchangeError($feedback); // unknown $message
+            $firstChar = $this->safe_string($body, 0);
+            if ($firstChar === '{') {
+                $throwError = true;
             }
+        } else {
+            // json $response with error, i.e:
+            // [array("status":"error","message":"Momentary balance check. Please wait few seconds and try the transfer again.")]
+            $responseObject = $this->safe_value($response, 0, array());
+            $status = $this->safe_string($responseObject, 'status', '');
+            if ($status === 'error') {
+                $throwError = true;
+            }
+        }
+        if ($throwError) {
+            $feedback = $this->id . ' ' . $body;
+            $message = $this->safe_string_2($response, 'message', 'error');
+            $this->throw_exactly_matched_exception($this->exceptions['exact'], $message, $feedback);
+            $this->throw_broadly_matched_exception($this->exceptions['broad'], $message, $feedback);
+            throw new ExchangeError($feedback); // unknown $message
         }
     }
 }

@@ -74,6 +74,8 @@ class cdax(Exchange):
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'fetchTradingLimits': True,
                 'fetchWithdrawals': True,
                 'withdraw': True,
@@ -373,7 +375,7 @@ class cdax(Exchange):
         markets = self.safe_value(response, 'data')
         numMarkets = len(markets)
         if numMarkets < 1:
-            raise NetworkError(self.id + ' publicGetCommonSymbols returned empty response: ' + self.json(markets))
+            raise NetworkError(self.id + ' fetchMarkets() returned empty response: ' + self.json(markets))
         result = []
         for i in range(0, len(markets)):
             market = markets[i]
@@ -768,7 +770,7 @@ class cdax(Exchange):
                 trade = self.parse_trade(trades[j], market)
                 result.append(trade)
         result = self.sort_by(result, 'timestamp')
-        return self.filter_by_symbol_since_limit(result, symbol, since, limit)
+        return self.filter_by_symbol_since_limit(result, market['symbol'], since, limit)
 
     def parse_ohlcv(self, ohlcv, market=None):
         #
@@ -1277,8 +1279,8 @@ class cdax(Exchange):
         #
         return response
 
-    def currency_to_precision(self, currency, fee):
-        return self.decimal_to_precision(fee, 0, self.currencies[currency]['precision'])
+    def currency_to_precision(self, code, fee):
+        return self.decimal_to_precision(fee, 0, self.currencies[code]['precision'])
 
     def safe_network(self, networkId):
         lastCharacterIndex = len(networkId) - 1
@@ -1407,7 +1409,7 @@ class cdax(Exchange):
         network = self.safe_string_upper(transaction, 'chain')
         return {
             'info': transaction,
-            'id': self.safe_string(transaction, 'id'),
+            'id': self.safe_string_2(transaction, 'id', 'data'),
             'txid': self.safe_string(transaction, 'tx-hash'),
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
@@ -1476,11 +1478,7 @@ class cdax(Exchange):
                 request['chain'] = network + currency['id']
             params = self.omit(params, 'network')
         response = await self.privatePostDwWithdrawApiCreate(self.extend(request, params))
-        id = self.safe_string(response, 'data')
-        return {
-            'info': response,
-            'id': id,
-        }
+        return self.parse_transaction(response, currency)
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
         url = '/'

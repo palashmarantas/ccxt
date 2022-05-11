@@ -12,6 +12,7 @@ from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import AddressPending
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
+from ccxt.base.precise import Precise
 
 
 class upbit(Exchange):
@@ -44,7 +45,6 @@ class upbit(Exchange):
                 'fetchDeposits': True,
                 'fetchFundingHistory': False,
                 'fetchFundingRate': False,
-                'fetchFundingRateHistories': False,
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
@@ -61,8 +61,11 @@ class upbit(Exchange):
                 'fetchTicker': True,
                 'fetchTickers': True,
                 'fetchTrades': True,
+                'fetchTradingFee': True,
+                'fetchTradingFees': False,
                 'fetchTransactions': None,
                 'fetchWithdrawals': True,
+                'transfer': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -291,30 +294,36 @@ class upbit(Exchange):
         }
         response = await self.privateGetOrdersChance(self.extend(request, params))
         #
-        #     {    bid_fee:   "0.0005",
-        #           ask_fee:   "0.0005",
-        #            market: {         id:   "KRW-BTC",
-        #                             name:   "BTC/KRW",
-        #                      order_types: ["limit"],
-        #                      order_sides: ["ask", "bid"],
-        #                              bid: {  currency: "KRW",
-        #                                     price_unit:  null,
-        #                                      min_total:  1000  },
-        #                              ask: {  currency: "BTC",
-        #                                     price_unit:  null,
-        #                                      min_total:  1000  },
-        #                        max_total:   "1000000000.0",
-        #                            state:   "active"              },
-        #       bid_account: {         currency: "KRW",
-        #                                balance: "0.0",
-        #                                 locked: "0.0",
-        #                      avg_krw_buy_price: "0",
-        #                               modified:  False},
-        #       ask_account: {         currency: "BTC",
-        #                                balance: "0.00780836",
-        #                                 locked: "0.0",
-        #                      avg_krw_buy_price: "6465564.67",
-        #                               modified:  False        }      }
+        #     {
+        #         "bid_fee": "0.0015",
+        #         "ask_fee": "0.0015",
+        #         "market": {
+        #             "id": "KRW-BTC",
+        #             "name": "BTC/KRW",
+        #             "order_types": ["limit"],
+        #             "order_sides": ["ask", "bid"],
+        #             "bid": {"currency": "KRW", "price_unit": null, "min_total": 1000},
+        #             "ask": {"currency": "BTC", "price_unit": null, "min_total": 1000},
+        #             "max_total": "100000000.0",
+        #             "state": "active",
+        #         },
+        #         "bid_account": {
+        #             "currency": "KRW",
+        #             "balance": "0.0",
+        #             "locked": "0.0",
+        #             "avg_buy_price": "0",
+        #             "avg_buy_price_modified": False,
+        #             "unit_currency": "KRW",
+        #         },
+        #         "ask_account": {
+        #             "currency": "BTC",
+        #             "balance": "10.0",
+        #             "locked": "0.0",
+        #             "avg_buy_price": "8042000",
+        #             "avg_buy_price_modified": False,
+        #             "unit_currency": "KRW",
+        #         }
+        #     }
         #
         marketInfo = self.safe_value(response, 'market')
         bid = self.safe_value(marketInfo, 'bid')
@@ -491,7 +500,7 @@ class upbit(Exchange):
             # max URL length is 2083 symbols, including http schema, hostname, tld, etc...
             if len(ids) > self.options['fetchOrderBooksMaxLength']:
                 numIds = len(self.ids)
-                raise ExchangeError(self.id + ' has ' + str(numIds) + ' symbols(' + str(len(ids)) + ' characters) exceeding max URL length(' + str(self.options['fetchOrderBooksMaxLength']) + ' characters), you are required to specify a list of symbols in the first argument to fetchOrderBooks')
+                raise ExchangeError(self.id + ' fetchOrderBooks() has ' + str(numIds) + ' symbols(' + str(len(ids)) + ' characters) exceeding max URL length(' + str(self.options['fetchOrderBooksMaxLength']) + ' characters), you are required to specify a list of symbols in the first argument to fetchOrderBooks')
         else:
             ids = self.market_ids(symbols)
             ids = ','.join(ids)
@@ -611,7 +620,7 @@ class upbit(Exchange):
             # max URL length is 2083 symbols, including http schema, hostname, tld, etc...
             if len(ids) > self.options['fetchTickersMaxLength']:
                 numIds = len(self.ids)
-                raise ExchangeError(self.id + ' has ' + str(numIds) + ' symbols exceeding max URL length, you are required to specify a list of symbols in the first argument to fetchTickers')
+                raise ExchangeError(self.id + ' fetchTickers() has ' + str(numIds) + ' symbols exceeding max URL length, you are required to specify a list of symbols in the first argument to fetchTickers')
         else:
             ids = self.market_ids(symbols)
             ids = ','.join(ids)
@@ -760,6 +769,62 @@ class upbit(Exchange):
         #
         return self.parse_trades(response, market, since, limit)
 
+    async def fetch_trading_fee(self, symbol, params={}):
+        await self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'market': market['id'],
+        }
+        response = await self.privateGetOrdersChance(self.extend(request, params))
+        #
+        #     {
+        #         "bid_fee": "0.0005",
+        #         "ask_fee": "0.0005",
+        #         "maker_bid_fee": "0.0005",
+        #         "maker_ask_fee": "0.0005",
+        #         "market": {
+        #             "id": "KRW-BTC",
+        #             "name": "BTC/KRW",
+        #             "order_types": ["limit"],
+        #             "order_sides": ["ask", "bid"],
+        #             "bid": {"currency": "KRW", "price_unit": null, "min_total": 5000},
+        #             "ask": {"currency": "BTC", "price_unit": null, "min_total": 5000},
+        #             "max_total": "1000000000.0",
+        #             "state": "active"
+        #         },
+        #         "bid_account": {
+        #             "currency": "KRW",
+        #             "balance": "0.34202414",
+        #             "locked": "4999.99999922",
+        #             "avg_buy_price": "0",
+        #             "avg_buy_price_modified": True,
+        #             "unit_currency": "KRW"
+        #         },
+        #         "ask_account": {
+        #             "currency": "BTC",
+        #             "balance": "0.00048",
+        #             "locked": "0.0",
+        #             "avg_buy_price": "20870000",
+        #             "avg_buy_price_modified": False,
+        #             "unit_currency": "KRW"
+        #         }
+        #     }
+        #
+        askFee = self.safe_string(response, 'ask_fee')
+        bidFee = self.safe_string(response, 'bid_fee')
+        taker = Precise.string_max(askFee, bidFee)
+        makerAskFee = self.safe_string(response, 'maker_ask_fee')
+        makerBidFee = self.safe_string(response, 'maker_bid_fee')
+        maker = Precise.string_max(makerAskFee, makerBidFee)
+        return {
+            'info': response,
+            'symbol': symbol,
+            'maker': self.parse_number(maker),
+            'taker': self.parse_number(taker),
+            'percentage': True,
+            'tierBased': False,
+        }
+
     def parse_ohlcv(self, ohlcv, market=None):
         #
         #     {
@@ -853,7 +918,7 @@ class upbit(Exchange):
         elif side == 'sell':
             orderSide = 'ask'
         else:
-            raise InvalidOrder(self.id + ' createOrder allows buy or sell side only!')
+            raise InvalidOrder(self.id + ' createOrder() allows buy or sell side only!')
         await self.load_markets()
         market = self.market(symbol)
         request = {

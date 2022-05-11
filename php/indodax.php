@@ -43,7 +43,6 @@ class indodax extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
@@ -61,6 +60,8 @@ class indodax extends Exchange {
                 'fetchTickers' => null,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
@@ -558,6 +559,7 @@ class indodax extends Exchange {
         $market = null;
         if ($symbol !== null) {
             $market = $this->market($symbol);
+            $symbol = $market['symbol'];
             $request['pair'] = $market['id'];
         }
         $response = $this->privatePostOrderHistory (array_merge($request, $params));
@@ -568,7 +570,7 @@ class indodax extends Exchange {
 
     public function create_order($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         if ($type !== 'limit') {
-            throw new ExchangeError($this->id . ' allows limit orders only');
+            throw new ExchangeError($this->id . ' createOrder() allows limit orders only');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -648,13 +650,48 @@ class indodax extends Exchange {
         //         "withdraw_memo" => "123123"
         //     }
         //
-        $id = null;
-        if ((is_array($response) && array_key_exists('txid', $response)) && (strlen($response['txid']) > 0)) {
-            $id = $response['txid'];
-        }
+        return $this->parse_transaction($response, $currency);
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        // withdraw
+        //
+        //     {
+        //         "success" => 1,
+        //         "status" => "approved",
+        //         "withdraw_currency" => "xrp",
+        //         "withdraw_address" => "rwWr7KUZ3ZFwzgaDGjKBysADByzxvohQ3C",
+        //         "withdraw_amount" => "10000.00000000",
+        //         "fee" => "2.00000000",
+        //         "amount_after_fee" => "9998.00000000",
+        //         "submit_time" => "1509469200",
+        //         "withdraw_id" => "xrp-12345",
+        //         "txid" => "",
+        //         "withdraw_memo" => "123123"
+        //     }
+        //
+        $currency = $this->safe_currency(null, $currency);
         return array(
-            'info' => $response,
-            'id' => $id,
+            'id' => $this->safe_string($transaction, 'withdraw_id'),
+            'txid' => $this->safe_string($transaction, 'txid'),
+            'timestamp' => null,
+            'datetime' => null,
+            'network' => null,
+            'addressFrom' => null,
+            'address' => null,
+            'addressTo' => null,
+            'amount' => null,
+            'type' => null,
+            'currency' => $currency['code'],
+            'status' => null,
+            'updated' => null,
+            'tagFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'comment' => null,
+            'fee' => null,
+            'info' => $transaction,
         );
     }
 

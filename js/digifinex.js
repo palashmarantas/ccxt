@@ -42,7 +42,10 @@ module.exports = class digifinex extends Exchange {
                 'fetchTickers': true,
                 'fetchTime': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'fetchWithdrawals': true,
+                'transfer': true,
                 'withdraw': true,
             },
             'timeframes': {
@@ -81,7 +84,7 @@ module.exports = class digifinex extends Exchange {
                         'trades',
                         'trades/symbols',
                         'ticker',
-                        'currencies', // todo add fetchCurrencies
+                        'currencies',
                     ],
                 },
                 'private': {
@@ -89,7 +92,7 @@ module.exports = class digifinex extends Exchange {
                         '{market}/financelog',
                         '{market}/mytrades',
                         '{market}/order',
-                        '{market}​/order​/detail', // todo add fetchOrder
+                        '{market}/order/detail',
                         '{market}/order/current',
                         '{market}/order/history',
                         'margin/assets',
@@ -106,28 +109,28 @@ module.exports = class digifinex extends Exchange {
                         'spot/order',
                         'spot/order/current',
                         'spot/order/history',
-                        'deposit/address', // todo add fetchDepositAddress
-                        'deposit/history', // todo add fetchDeposits
-                        'withdraw/history', // todo add fetchWithdrawals
+                        'deposit/address',
+                        'deposit/history',
+                        'withdraw/history',
                     ],
                     'post': [
                         '{market}/order/cancel',
                         '{market}/order/new',
-                        '{market}​/order​/batch_new',
+                        '{market}/order/batch_new',
                         'margin/order/cancel',
                         'margin/order/new',
                         'margin/position/close',
                         'spot/order/cancel',
                         'spot/order/new',
                         'transfer',
-                        'withdraw/new', // todo add withdraw()
+                        'withdraw/new',
                         'withdraw/cancel',
                     ],
                 },
             },
             'fees': {
                 'trading': {
-                    'tierBased': false,
+                    'tierBased': true,
                     'percentage': true,
                     'maker': this.parseNumber ('0.002'),
                     'taker': this.parseNumber ('0.002'),
@@ -189,6 +192,11 @@ module.exports = class digifinex extends Exchange {
             'options': {
                 'defaultType': 'spot',
                 'types': [ 'spot', 'margin', 'otc' ],
+                'accountsByType': {
+                    'spot': '1',
+                    'margin': '2',
+                    'OTC': '3',
+                },
             },
             'commonCurrencies': {
                 'BHT': 'Black House Test',
@@ -717,18 +725,22 @@ module.exports = class digifinex extends Exchange {
     }
 
     async fetchStatus (params = {}) {
-        await this.publicGetPing (params);
+        const response = await this.publicGetPing (params);
         //
         //     {
         //         "msg": "pong",
         //         "code": 0
         //     }
         //
-        this.status = this.extend (this.status, {
-            'status': 'ok',
+        const code = this.safeInteger (response, 'code');
+        const status = (code === 0) ? 'ok' : 'maintenance';
+        return {
+            'status': status,
             'updated': this.milliseconds (),
-        });
-        return this.status;
+            'eta': undefined,
+            'url': undefined,
+            'info': response,
+        };
     }
 
     async fetchTrades (symbol, since = undefined, limit = undefined, params = {}) {
@@ -885,7 +897,7 @@ module.exports = class digifinex extends Exchange {
         const canceledOrders = this.safeValue (response, 'success', []);
         const numCanceledOrders = canceledOrders.length;
         if (numCanceledOrders !== 1) {
-            throw new OrderNotFound (this.id + ' cancelOrder ' + id + ' not found');
+            throw new OrderNotFound (this.id + ' cancelOrder() ' + id + ' not found');
         }
         return response;
     }
@@ -915,7 +927,7 @@ module.exports = class digifinex extends Exchange {
         const canceledOrders = this.safeValue (response, 'success', []);
         const numCanceledOrders = canceledOrders.length;
         if (numCanceledOrders < 1) {
-            throw new OrderNotFound (this.id + ' cancelOrders error');
+            throw new OrderNotFound (this.id + ' cancelOrders() error');
         }
         return response;
     }
@@ -1304,7 +1316,7 @@ module.exports = class digifinex extends Exchange {
         const addresses = this.parseDepositAddresses (data);
         const address = this.safeValue (addresses, code);
         if (address === undefined) {
-            throw new InvalidAddress (this.id + ' fetchDepositAddress did not return an address for ' + code + ' - create the deposit address in the user settings on the exchange website first.');
+            throw new InvalidAddress (this.id + ' fetchDepositAddress() did not return an address for ' + code + ' - create the deposit address in the user settings on the exchange website first.');
         }
         return address;
     }
@@ -1440,6 +1452,59 @@ module.exports = class digifinex extends Exchange {
             'updated': updated,
             'fee': fee,
         };
+    }
+
+    parseTransferStatus (status) {
+        const statuses = {
+            '0': 'ok',
+        };
+        return this.safeString (statuses, status, status);
+    }
+
+    parseTransfer (transfer, currency = undefined) {
+        //
+        //     {
+        //         "code": 0
+        //     }
+        //
+        return {
+            'info': transfer,
+            'id': undefined,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'currency': this.safeCurrencyCode (undefined, currency),
+            'amount': this.safeNumber (transfer, 'amount'),
+            'fromAccount': this.safeString (transfer, 'fromAccount'),
+            'toAccount': this.safeString (transfer, 'toAccount'),
+            'status': this.parseTransferStatus (this.safeString (transfer, 'code')),
+        };
+    }
+
+    async transfer (code, amount, fromAccount, toAccount, params = {}) {
+        await this.loadMarkets ();
+        const currency = this.currency (code);
+        const accountsByType = this.safeValue (this.options, 'accountsByType', {});
+        const fromId = this.safeString (accountsByType, fromAccount, fromAccount);
+        const toId = this.safeString (accountsByType, toAccount, toAccount);
+        const request = {
+            'currency_mark': currency['id'],
+            'num': parseFloat (this.currencyToPrecision (code, amount)),
+            'from': fromId, // 1 = SPOT, 2 = MARGIN, 3 = OTC
+            'to': toId, // 1 = SPOT, 2 = MARGIN, 3 = OTC
+        };
+        const response = await this.privatePostTransfer (this.extend (request, params));
+        //
+        //     {
+        //         "code": 0
+        //     }
+        //
+        const transfer = this.parseTransfer (response, currency);
+        return this.extend (transfer, {
+            'amount': amount,
+            'currency': code,
+            'fromAccount': fromAccount,
+            'toAccount': toAccount,
+        });
     }
 
     async withdraw (code, amount, address, tag = undefined, params = {}) {

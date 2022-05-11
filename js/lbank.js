@@ -38,7 +38,6 @@ module.exports = class lbank extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchLeverageTiers': false,
                 'fetchMarkets': true,
@@ -55,6 +54,8 @@ module.exports = class lbank extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
@@ -80,7 +81,7 @@ module.exports = class lbank extends Exchange {
                 'api': 'https://api.lbank.info',
                 'www': 'https://www.lbank.info',
                 'doc': 'https://github.com/LBank-exchange/lbank-official-api-docs',
-                'fees': 'https://lbankinfo.zendesk.com/hc/en-gb/articles/360012072873-Trading-Fees',
+                'fees': 'https://www.lbank.info/fees.html',
                 'referral': 'https://www.lbex.io/invite?icode=7QCY',
             },
             'api': {
@@ -118,8 +119,9 @@ module.exports = class lbank extends Exchange {
                 },
             },
             'commonCurrencies': {
-                'VET_ERC20': 'VEN',
+                'GMT': 'GMT Token',
                 'PNT': 'Penta',
+                'VET_ERC20': 'VEN',
             },
             'options': {
                 'cacheSecretAsPem': true,
@@ -192,7 +194,7 @@ module.exports = class lbank extends Exchange {
                         'max': undefined,
                     },
                     'amount': {
-                        'min': undefined,
+                        'min': this.safeFloat (market, 'minTranQua'),
                         'max': undefined,
                     },
                     'price': {
@@ -585,6 +587,11 @@ module.exports = class lbank extends Exchange {
     }
 
     async fetchClosedOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        if (symbol !== undefined) {
+            const market = this.market (symbol);
+            symbol = market['symbol'];
+        }
         const orders = await this.fetchOrders (symbol, since, limit, params);
         const closed = this.filterBy (orders, 'status', 'closed');
         const canceled = this.filterBy (orders, 'status', 'cancelled'); // cancelled orders may be partially filled
@@ -607,9 +614,47 @@ module.exports = class lbank extends Exchange {
             request['memo'] = tag;
         }
         const response = this.privatePostWithdraw (this.extend (request, params));
+        //
+        //     {
+        //         'result': 'true',
+        //         'withdrawId': 90082,
+        //         'fee':0.001
+        //     }
+        //
+        return this.parseTransaction (response, currency);
+    }
+
+    parseTransaction (transaction, currency = undefined) {
+        //
+        // withdraw
+        //
+        //     {
+        //         'result': 'true',
+        //         'withdrawId': 90082,
+        //         'fee':0.001
+        //     }
+        //
+        currency = this.safeCurrency (undefined, currency);
         return {
-            'id': this.safeString (response, 'id'),
-            'info': response,
+            'id': this.safeString2 (transaction, 'id', 'withdrawId'),
+            'txid': undefined,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'network': undefined,
+            'addressFrom': undefined,
+            'address': undefined,
+            'addressTo': undefined,
+            'amount': undefined,
+            'type': undefined,
+            'currency': currency['code'],
+            'status': undefined,
+            'updated': undefined,
+            'tagFrom': undefined,
+            'tag': undefined,
+            'tagTo': undefined,
+            'comment': undefined,
+            'fee': undefined,
+            'info': transaction,
         };
     }
 

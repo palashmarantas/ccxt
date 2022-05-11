@@ -58,7 +58,6 @@ class stex(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
                 'fetchLeverageTiers': False,
                 'fetchMarkets': True,
@@ -77,6 +76,8 @@ class stex(Exchange):
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': True,
+                'fetchTradingFees': False,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
                 'setLeverage': False,
@@ -780,14 +781,11 @@ class stex(Exchange):
         timestamp = self.safe_timestamp(trade, 'timestamp')
         priceString = self.safe_string(trade, 'price')
         amountString = self.safe_string(trade, 'amount')
-        price = self.parse_number(priceString)
-        amount = self.parse_number(amountString)
-        cost = self.parse_number(Precise.string_mul(priceString, amountString))
         symbol = None
         if (symbol is None) and (market is not None):
             symbol = market['symbol']
         side = self.safe_string_lower_2(trade, 'type', 'trade_type')
-        return {
+        return self.safe_trade({
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
@@ -797,11 +795,11 @@ class stex(Exchange):
             'type': None,
             'takerOrMaker': None,
             'side': side,
-            'price': price,
-            'amount': amount,
-            'cost': cost,
+            'price': priceString,
+            'amount': amountString,
+            'cost': None,
             'fee': None,
-        }
+        }, market)
 
     def fetch_trades(self, symbol, since=None, limit=None, params={}):
         self.load_markets()
@@ -836,6 +834,30 @@ class stex(Exchange):
         #
         trades = self.safe_value(response, 'data', [])
         return self.parse_trades(trades, market, since, limit)
+
+    def fetch_trading_fee(self, symbol, params={}):
+        self.load_markets()
+        market = self.market(symbol)
+        request = {
+            'currencyPairId': market['id'],
+        }
+        response = self.tradingGetFeesCurrencyPairId(self.extend(request, params))
+        #
+        #     {
+        #         success: True,
+        #         data: {buy_fee: '0.00200000', sell_fee: '0.00200000'},
+        #         unified_message: {message_id: 'operation_successful', substitutions: []}
+        #      }
+        #
+        data = self.safe_value(response, 'data')
+        return {
+            'info': response,
+            'symbol': market['symbol'],
+            'maker': self.safe_number(data, 'sell_fee'),
+            'taker': self.safe_number(data, 'buy_fee'),
+            'percentage': True,
+            'tierBased': True,
+        }
 
     def parse_balance(self, response):
         result = {
@@ -1027,7 +1049,7 @@ class stex(Exchange):
 
     def create_order(self, symbol, type, side, amount, price=None, params={}):
         if type == 'market':
-            raise ExchangeError(self.id + ' createOrder allows limit orders only')
+            raise ExchangeError(self.id + ' createOrder() allows limit orders only')
         self.load_markets()
         market = self.market(symbol)
         if type == 'limit':
@@ -1236,14 +1258,14 @@ class stex(Exchange):
         numRejectedOrders = len(rejectedOrders)
         if numAcceptedOrders < 1:
             if numRejectedOrders < 1:
-                raise OrderNotFound(self.id + ' cancelOrder received an empty response: ' + self.json(response))
+                raise OrderNotFound(self.id + ' cancelOrder() received an empty response: ' + self.json(response))
             else:
                 return self.parse_order(rejectedOrders[0])
         else:
             if numRejectedOrders < 1:
                 return self.parse_order(acceptedOrders[0])
             else:
-                raise OrderNotFound(self.id + ' cancelOrder received an empty response: ' + self.json(response))
+                raise OrderNotFound(self.id + ' cancelOrder() received an empty response: ' + self.json(response))
 
     def cancel_all_orders(self, symbol=None, params={}):
         self.load_markets()

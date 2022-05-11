@@ -39,6 +39,9 @@ class huobijp extends Exchange {
                 'cancelOrder' => true,
                 'cancelOrders' => true,
                 'createOrder' => true,
+                'createStopLimitOrder' => false,
+                'createStopMarketOrder' => false,
+                'createStopOrder' => false,
                 'fetchAccounts' => true,
                 'fetchBalance' => true,
                 'fetchClosedOrders' => true,
@@ -280,7 +283,10 @@ class huobijp extends Exchange {
                     'system-maintenance' => '\\ccxt\\OnMaintenance', // array("status" => "error", "err-code" => "system-maintenance", "err-msg" => "System is in maintenance!", "data" => null)
                     // err-msg
                     'invalid symbol' => '\\ccxt\\BadSymbol', // array("ts":1568813334794,"status":"error","err-code":"invalid-parameter","err-msg":"invalid symbol")
-                    'symbol trade not open now' => '\\ccxt\\BadSymbol', // array("ts":1576210479343,"status":"error","err-code":"invalid-parameter","err-msg":"symbol trade not open now")
+                    'symbol trade not open now' => '\\ccxt\\BadSymbol', // array("ts":1576210479343,"status":"error","err-code":"invalid-parameter","err-msg":"symbol trade not open now"),
+                    'invalid-address' => '\\ccxt\\BadRequest', // array("status":"error","err-code":"invalid-address","err-msg":"Invalid address.","data":null),
+                    'base-currency-chain-error' => '\\ccxt\\BadRequest', // array("status":"error","err-code":"base-currency-chain-error","err-msg":"The current currency chain does not exist","data":null),
+                    'dw-insufficient-balance' => '\\ccxt\\InsufficientFunds', // array("status":"error","err-code":"dw-insufficient-balance","err-msg":"Insufficient balance. You can only transfer `12.3456` at most.","data":null)
                 ),
             ),
             'options' => array(
@@ -439,7 +445,7 @@ class huobijp extends Exchange {
         $markets = $this->safe_value($response, 'data');
         $numMarkets = is_array($markets) ? count($markets) : 0;
         if ($numMarkets < 1) {
-            throw new NetworkError($this->id . ' publicGetCommonSymbols returned empty $response => ' . $this->json($markets));
+            throw new NetworkError($this->id . ' fetchMarkets() returned empty $response => ' . $this->json($markets));
         }
         $result = array();
         for ($i = 0; $i < count($markets); $i++) {
@@ -846,7 +852,7 @@ class huobijp extends Exchange {
             }
         }
         $result = $this->sort_by($result, 'timestamp');
-        return $this->filter_by_symbol_since_limit($result, $symbol, $since, $limit);
+        return $this->filter_by_symbol_since_limit($result, $market['symbol'], $since, $limit);
     }
 
     public function parse_ohlcv($ohlcv, $market = null) {
@@ -1396,8 +1402,8 @@ class huobijp extends Exchange {
         return $response;
     }
 
-    public function currency_to_precision($currency, $fee) {
-        return $this->decimal_to_precision($fee, 0, $this->currencies[$currency]['precision']);
+    public function currency_to_precision($code, $fee) {
+        return $this->decimal_to_precision($fee, 0, $this->currencies[$code]['precision']);
     }
 
     public function safe_network($networkId) {
@@ -1526,6 +1532,13 @@ class huobijp extends Exchange {
         //         'updated-at' => 1552108032859
         //     }
         //
+        // withdraw
+        //
+        //     {
+        //         "status" => "ok",
+        //         "data" => "99562054"
+        //     }
+        //
         $timestamp = $this->safe_integer($transaction, 'created-at');
         $updated = $this->safe_integer($transaction, 'updated-at');
         $code = $this->safe_currency_code($this->safe_string($transaction, 'currency'));
@@ -1543,7 +1556,7 @@ class huobijp extends Exchange {
         $network = $this->safe_string_upper($transaction, 'chain');
         return array(
             'info' => $transaction,
-            'id' => $this->safe_string($transaction, 'id'),
+            'id' => $this->safe_string_2($transaction, 'id', 'data'),
             'txid' => $this->safe_string($transaction, 'tx-hash'),
             'timestamp' => $timestamp,
             'datetime' => $this->iso8601($timestamp),
@@ -1617,11 +1630,13 @@ class huobijp extends Exchange {
             $params = $this->omit($params, 'network');
         }
         $response = yield $this->privatePostDwWithdrawApiCreate (array_merge($request, $params));
-        $id = $this->safe_string($response, 'data');
-        return array(
-            'info' => $response,
-            'id' => $id,
-        );
+        //
+        //     {
+        //         "status" => "ok",
+        //         "data" => "99562054"
+        //     }
+        //
+        return $this->parse_transaction($response, $currency);
     }
 
     public function sign($path, $api = 'public', $method = 'GET', $params = array (), $headers = null, $body = null) {

@@ -43,6 +43,8 @@ module.exports = class bibox extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'fetchWithdrawals': true,
                 'withdraw': true,
             },
@@ -101,8 +103,8 @@ module.exports = class bibox extends Exchange {
                 'trading': {
                     'tierBased': false,
                     'percentage': true,
-                    'taker': this.parseNumber ('0.001'),
-                    'maker': this.parseNumber ('0.0008'),
+                    'taker': this.parseNumber ('0.002'),
+                    'maker': this.parseNumber ('0.001'),
                 },
                 'funding': {
                     'tierBased': false,
@@ -139,7 +141,7 @@ module.exports = class bibox extends Exchange {
                 'APENFT(NFT)': 'NFT',
                 'BOX': 'DefiBox',
                 'BPT': 'BlockPool Token',
-                'GTC': 'Game.com',
+                'GMT': 'GMT Token',
                 'KEY': 'Bihu',
                 'MTC': 'MTC Mesh Network', // conflict with MTC Docademic doc.com Token https://github.com/ccxt/ccxt/issues/6081 https://github.com/ccxt/ccxt/issues/3025
                 'NFT': 'NFT Protocol',
@@ -811,7 +813,14 @@ module.exports = class bibox extends Exchange {
         //         'status': 3
         //     }
         //
-        const id = this.safeString (transaction, 'id');
+        // withdraw
+        //
+        //     {
+        //         "result": 228, // withdrawal id
+        //         "cmd":"transfer/transferOut"
+        //     }
+        //
+        const id = this.safeString2 (transaction, 'id', 'result');
         const address = this.safeString (transaction, 'to_address');
         const currencyId = this.safeString (transaction, 'coin_symbol');
         const code = this.safeCurrencyCode (currencyId, currency);
@@ -1288,11 +1297,7 @@ module.exports = class bibox extends Exchange {
         //
         const outerResults = this.safeValue (response, 'result');
         const firstResult = this.safeValue (outerResults, 0, {});
-        const id = this.safeValue (firstResult, 'result');
-        return {
-            'info': response,
-            'id': id,
-        };
+        return this.parseTransaction (firstResult, currency);
     }
 
     async fetchFundingFees (codes = undefined, params = {}) {

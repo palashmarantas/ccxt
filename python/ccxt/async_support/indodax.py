@@ -48,7 +48,6 @@ class indodax(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
                 'fetchLeverageTiers': False,
                 'fetchMarkets': True,
@@ -66,6 +65,8 @@ class indodax(Exchange):
                 'fetchTickers': None,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
@@ -535,6 +536,7 @@ class indodax(Exchange):
         market = None
         if symbol is not None:
             market = self.market(symbol)
+            symbol = market['symbol']
             request['pair'] = market['id']
         response = await self.privatePostOrderHistory(self.extend(request, params))
         orders = self.parse_orders(response['return']['orders'], market)
@@ -543,7 +545,7 @@ class indodax(Exchange):
 
     async def create_order(self, symbol, type, side, amount, price=None, params={}):
         if type != 'limit':
-            raise ExchangeError(self.id + ' allows limit orders only')
+            raise ExchangeError(self.id + ' createOrder() allows limit orders only')
         await self.load_markets()
         market = self.market(symbol)
         request = {
@@ -616,12 +618,47 @@ class indodax(Exchange):
         #         "withdraw_memo": "123123"
         #     }
         #
-        id = None
-        if ('txid' in response) and (len(response['txid']) > 0):
-            id = response['txid']
+        return self.parse_transaction(response, currency)
+
+    def parse_transaction(self, transaction, currency=None):
+        #
+        # withdraw
+        #
+        #     {
+        #         "success": 1,
+        #         "status": "approved",
+        #         "withdraw_currency": "xrp",
+        #         "withdraw_address": "rwWr7KUZ3ZFwzgaDGjKBysADByzxvohQ3C",
+        #         "withdraw_amount": "10000.00000000",
+        #         "fee": "2.00000000",
+        #         "amount_after_fee": "9998.00000000",
+        #         "submit_time": "1509469200",
+        #         "withdraw_id": "xrp-12345",
+        #         "txid": "",
+        #         "withdraw_memo": "123123"
+        #     }
+        #
+        currency = self.safe_currency(None, currency)
         return {
-            'info': response,
-            'id': id,
+            'id': self.safe_string(transaction, 'withdraw_id'),
+            'txid': self.safe_string(transaction, 'txid'),
+            'timestamp': None,
+            'datetime': None,
+            'network': None,
+            'addressFrom': None,
+            'address': None,
+            'addressTo': None,
+            'amount': None,
+            'type': None,
+            'currency': currency['code'],
+            'status': None,
+            'updated': None,
+            'tagFrom': None,
+            'tag': None,
+            'tagTo': None,
+            'comment': None,
+            'fee': None,
+            'info': transaction,
         }
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):

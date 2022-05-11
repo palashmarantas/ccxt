@@ -33,6 +33,9 @@ class bitrue extends Exchange {
                 'cancelAllOrders' => false,
                 'cancelOrder' => true,
                 'createOrder' => true,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'fetchBalance' => true,
                 'fetchBidsAsks' => true,
                 'fetchBorrowRate' => false,
@@ -240,6 +243,9 @@ class bitrue extends Exchange {
                     'ADA' => 'Cardano',
                 ),
             ),
+            'commonCurrencies' => array(
+                'MIM' => 'MIM Swarm',
+            ),
             // https://binance-docs.github.io/apidocs/spot/en/#error-codes-2
             'exceptions' => array(
                 'exact' => array(
@@ -319,10 +325,10 @@ class bitrue extends Exchange {
         return $this->decimal_to_precision($cost, TRUNCATE, $this->markets[$symbol]['precision']['quote'], $this->precisionMode, $this->paddingMode);
     }
 
-    public function currency_to_precision($currency, $fee) {
+    public function currency_to_precision($code, $fee) {
         // info is available in currencies only if the user has configured his api keys
-        if ($this->safe_value($this->currencies[$currency], 'precision') !== null) {
-            return $this->decimal_to_precision($fee, TRUNCATE, $this->currencies[$currency]['precision'], $this->precisionMode, $this->paddingMode);
+        if ($this->safe_value($this->currencies[$code], 'precision') !== null) {
+            return $this->decimal_to_precision($fee, TRUNCATE, $this->currencies[$code]['precision'], $this->precisionMode, $this->paddingMode);
         } else {
             return $this->number_to_string($fee);
         }
@@ -334,14 +340,21 @@ class bitrue extends Exchange {
 
     public function fetch_status($params = array ()) {
         $response = yield $this->v1PublicGetPing ($params);
+        //
+        // empty means working status.
+        //
+        //     array()
+        //
         $keys = is_array($response) ? array_keys($response) : array();
         $keysLength = is_array($keys) ? count($keys) : 0;
         $formattedStatus = $keysLength ? 'maintenance' : 'ok';
-        $this->status = array_merge($this->status, array(
+        return array(
             'status' => $formattedStatus,
             'updated' => $this->milliseconds(),
-        ));
-        return $this->status;
+            'eta' => null,
+            'url' => null,
+            'info' => $response,
+        );
     }
 
     public function fetch_time($params = array ()) {
@@ -1228,7 +1241,7 @@ class bitrue extends Exchange {
 
     public function fetch_open_orders($symbol = null, $since = null, $limit = null, $params = array ()) {
         if ($symbol === null) {
-            throw new ArgumentsRequired($this->id . ' fetchOpenOrders requires a $symbol argument');
+            throw new ArgumentsRequired($this->id . ' fetchOpenOrders() requires a $symbol argument');
         }
         yield $this->load_markets();
         $market = $this->market($symbol);
@@ -1340,7 +1353,7 @@ class bitrue extends Exchange {
 
     public function fetch_deposits($code = null, $since = null, $limit = null, $params = array ()) {
         if ($code === null) {
-            throw new ArgumentsRequired($this->id . ' fetchDeposits requires a $code argument');
+            throw new ArgumentsRequired($this->id . ' fetchDeposits() requires a $code argument');
         }
         yield $this->load_markets();
         $currency = $this->currency($code);
@@ -1402,7 +1415,7 @@ class bitrue extends Exchange {
 
     public function fetch_withdrawals($code = null, $since = null, $limit = null, $params = array ()) {
         if ($code === null) {
-            throw new ArgumentsRequired($this->id . ' fetchWithdrawals requires a $code argument');
+            throw new ArgumentsRequired($this->id . ' fetchWithdrawals() requires a $code argument');
         }
         yield $this->load_markets();
         $currency = $this->currency($code);
@@ -1437,7 +1450,7 @@ class bitrue extends Exchange {
         //     }
         //
         $data = $this->safe_value($response, 'data', array());
-        return $this->parse_transaction($data, $currency);
+        return $this->parse_transactions($data, $currency);
     }
 
     public function parse_transaction_status_by_type($status, $type = null) {
@@ -1602,7 +1615,7 @@ class bitrue extends Exchange {
             $networkEntry = $this->safe_value($networks, $network, array());
             $chainName = $this->safe_string($networkEntry, 'id'); // handle ERC20>ETH alias
             if ($chainName === null) {
-                throw new ArgumentsRequired($this->id . ' withdraw requires a $network parameter or a $chainName parameter');
+                throw new ArgumentsRequired($this->id . ' withdraw() requires a $network parameter or a $chainName parameter');
             }
             $params = $this->omit($params, 'network');
         }
@@ -1620,10 +1633,7 @@ class bitrue extends Exchange {
         }
         $response = yield $this->v1PrivatePostWithdrawCommit (array_merge($request, $params));
         //     array( id => '9a67628b16ba4988ae20d329333f16bc' )
-        return array(
-            'info' => $response,
-            'id' => $this->safe_string($response, 'id'),
-        );
+        return $this->parse_transaction($response, $currency);
     }
 
     public function sign($path, $api = 'public', $method = 'GET', $params = array (), $headers = null, $body = null) {

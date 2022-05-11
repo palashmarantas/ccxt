@@ -16,7 +16,7 @@ class bitvavo extends Exchange {
             'id' => 'bitvavo',
             'name' => 'Bitvavo',
             'countries' => array( 'NL' ), // Netherlands
-            'rateLimit' => 60.1, // 1000 requests per second
+            'rateLimit' => 60, // 1000 requests per minute
             'version' => 'v2',
             'certified' => true,
             'pro' => true,
@@ -32,6 +32,9 @@ class bitvavo extends Exchange {
                 'cancelOrder' => true,
                 'createOrder' => true,
                 'createReduceOnlyOrder' => false,
+                'createStopLimitOrder' => true,
+                'createStopMarketOrder' => true,
+                'createStopOrder' => true,
                 'editOrder' => true,
                 'fetchBalance' => true,
                 'fetchBorrowRate' => false,
@@ -47,7 +50,6 @@ class bitvavo extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchLeverageTiers' => false,
                 'fetchMarkets' => true,
@@ -66,11 +68,16 @@ class bitvavo extends Exchange {
                 'fetchTickers' => true,
                 'fetchTime' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => true,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
                 'fetchWithdrawals' => true,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
+                'transfer' => false,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -113,6 +120,7 @@ class bitvavo extends Exchange {
                 ),
                 'private' => array(
                     'get' => array(
+                        'account' => 1,
                         'order' => 1,
                         'orders' => 5,
                         'ordersOpen' => array( 'cost' => 1, 'noMarket' => 25 ),
@@ -144,25 +152,25 @@ class bitvavo extends Exchange {
                     'tiers' => array(
                         'taker' => array(
                             array( $this->parse_number('0'), $this->parse_number('0.0025') ),
-                            array( $this->parse_number('50000'), $this->parse_number('0.0024') ),
-                            array( $this->parse_number('100000'), $this->parse_number('0.0022') ),
-                            array( $this->parse_number('250000'), $this->parse_number('0.0020') ),
-                            array( $this->parse_number('500000'), $this->parse_number('0.0018') ),
-                            array( $this->parse_number('1000000'), $this->parse_number('0.0016') ),
-                            array( $this->parse_number('2500000'), $this->parse_number('0.0014') ),
-                            array( $this->parse_number('5000000'), $this->parse_number('0.0012') ),
-                            array( $this->parse_number('10000000'), $this->parse_number('0.0010') ),
+                            array( $this->parse_number('100000'), $this->parse_number('0.0020') ),
+                            array( $this->parse_number('250000'), $this->parse_number('0.0016') ),
+                            array( $this->parse_number('500000'), $this->parse_number('0.0012') ),
+                            array( $this->parse_number('1000000'), $this->parse_number('0.0010') ),
+                            array( $this->parse_number('2500000'), $this->parse_number('0.0008') ),
+                            array( $this->parse_number('5000000'), $this->parse_number('0.0006') ),
+                            array( $this->parse_number('10000000'), $this->parse_number('0.0005') ),
+                            array( $this->parse_number('25000000'), $this->parse_number('0.0004') ),
                         ),
                         'maker' => array(
-                            array( $this->parse_number('0'), $this->parse_number('0.0020') ),
-                            array( $this->parse_number('50000'), $this->parse_number('0.0015') ),
+                            array( $this->parse_number('0'), $this->parse_number('0.0015') ),
                             array( $this->parse_number('100000'), $this->parse_number('0.0010') ),
-                            array( $this->parse_number('250000'), $this->parse_number('0.0006') ),
-                            array( $this->parse_number('500000'), $this->parse_number('0.0003') ),
-                            array( $this->parse_number('1000000'), $this->parse_number('0.0001') ),
-                            array( $this->parse_number('2500000'), $this->parse_number('-0.0001') ),
-                            array( $this->parse_number('5000000'), $this->parse_number('-0.0003') ),
-                            array( $this->parse_number('10000000'), $this->parse_number('-0.0005') ),
+                            array( $this->parse_number('250000'), $this->parse_number('0.0008') ),
+                            array( $this->parse_number('500000'), $this->parse_number('0.0006') ),
+                            array( $this->parse_number('1000000'), $this->parse_number('0.0005') ),
+                            array( $this->parse_number('2500000'), $this->parse_number('0.0004') ),
+                            array( $this->parse_number('5000000'), $this->parse_number('0.0004') ),
+                            array( $this->parse_number('10000000'), $this->parse_number('0.0003') ),
+                            array( $this->parse_number('25000000'), $this->parse_number('0.0003') ),
                         ),
                     ),
                 ),
@@ -257,8 +265,8 @@ class bitvavo extends Exchange {
         ));
     }
 
-    public function currency_to_precision($currency, $fee) {
-        return $this->decimal_to_precision($fee, 0, $this->currencies[$currency]['precision']);
+    public function currency_to_precision($code, $fee) {
+        return $this->decimal_to_precision($fee, 0, $this->currencies[$code]['precision']);
     }
 
     public function amount_to_precision($symbol, $amount) {
@@ -671,6 +679,36 @@ class bitvavo extends Exchange {
         ), $market);
     }
 
+    public function fetch_trading_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->privateGetAccount ($params);
+        //
+        //     {
+        //         "fees" => {
+        //           "taker" => "0.0025",
+        //           "maker" => "0.0015",
+        //           "volume" => "10000.00"
+        //         }
+        //     }
+        //
+        $fees = $this->safe_value($response, 'fees');
+        $maker = $this->safe_number($fees, 'maker');
+        $taker = $this->safe_number($fees, 'taker');
+        $result = array();
+        for ($i = 0; $i < count($this->symbols); $i++) {
+            $symbol = $this->symbols[$i];
+            $result[$symbol] = array(
+                'info' => $response,
+                'symbol' => $symbol,
+                'maker' => $maker,
+                'taker' => $taker,
+                'percentage' => true,
+                'tierBased' => true,
+            );
+        }
+        return $result;
+    }
+
     public function fetch_order_book($symbol, $limit = null, $params = array ()) {
         $this->load_markets();
         $request = array(
@@ -852,10 +890,10 @@ class bitvavo extends Exchange {
             $stopPrice = $this->safe_number_2($params, 'stopPrice', 'triggerAmount');
             if ($stopPrice === null) {
                 if ($isStopLimit) {
-                    throw new ArgumentsRequired($this->id . ' createOrder requires a $stopPrice parameter for a ' . $type . ' order');
+                    throw new ArgumentsRequired($this->id . ' createOrder() requires a $stopPrice parameter for a ' . $type . ' order');
                 } else if ($isStopMarket) {
                     if ($price === null) {
-                        throw new ArgumentsRequired($this->id . ' createOrder requires a $price argument or a $stopPrice parameter for a ' . $type . ' order');
+                        throw new ArgumentsRequired($this->id . ' createOrder() requires a $price argument or a $stopPrice parameter for a ' . $type . ' order');
                     } else {
                         $stopPrice = $price;
                     }

@@ -4,13 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import ArgumentsRequired
@@ -44,7 +37,9 @@ class coinbase(Exchange):
                 'createDepositAddress': True,
                 'createOrder': None,
                 'createReduceOnlyOrder': False,
-                'deposit': None,
+                'createStopLimitOrder': False,
+                'createStopMarketOrder': False,
+                'createStopOrder': False,
                 'fetchAccounts': True,
                 'fetchBalance': True,
                 'fetchBidsAsks': None,
@@ -62,7 +57,6 @@ class coinbase(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchL2OrderBook': False,
                 'fetchLedger': True,
                 'fetchLeverage': False,
@@ -85,6 +79,8 @@ class coinbase(Exchange):
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': None,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'fetchTransactions': None,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
@@ -280,7 +276,7 @@ class coinbase(Exchange):
                     accountId = account['id']
                     break
         if accountId is None:
-            raise ExchangeError(self.id + ' createDepositAddress could not find the account with matching currency code, specify an `account_id` extra param')
+            raise ExchangeError(self.id + ' createDepositAddress() could not find the account with matching currency code, specify an `account_id` extra param')
         request = {
             'account_id': accountId,
         }
@@ -770,7 +766,7 @@ class coinbase(Exchange):
         bid = None
         last = None
         timestamp = self.milliseconds()
-        if not isinstance(ticker, basestring):
+        if not isinstance(ticker, str):
             spot, buy, sell = ticker
             spotData = self.safe_value(spot, 'data', {})
             buyData = self.safe_value(buy, 'data', {})
@@ -1180,7 +1176,7 @@ class coinbase(Exchange):
     def prepare_account_request(self, limit=None, params={}):
         accountId = self.safe_string_2(params, 'account_id', 'accountId')
         if accountId is None:
-            raise ArgumentsRequired(self.id + ' method requires an account_id(or accountId) parameter')
+            raise ArgumentsRequired(self.id + ' prepareAccountRequest() method requires an account_id(or accountId) parameter')
         request = {
             'account_id': accountId,
         }
@@ -1192,10 +1188,10 @@ class coinbase(Exchange):
         accountId = self.safe_string_2(params, 'account_id', 'accountId')
         if accountId is None:
             if code is None:
-                raise ArgumentsRequired(self.id + ' method requires an account_id(or accountId) parameter OR a currency code argument')
+                raise ArgumentsRequired(self.id + ' prepareAccountRequestWithCurrencyCode() method requires an account_id(or accountId) parameter OR a currency code argument')
             accountId = self.find_account_id(code)
             if accountId is None:
-                raise ExchangeError(self.id + ' could not find account id for ' + code)
+                raise ExchangeError(self.id + ' prepareAccountRequestWithCurrencyCode() could not find account id for ' + code)
         request = {
             'account_id': accountId,
         }

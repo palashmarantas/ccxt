@@ -4,6 +4,7 @@
 
 const Exchange = require ('./base/Exchange');
 const { ExchangeError, AuthenticationError, RateLimitExceeded, ArgumentsRequired } = require ('./base/errors');
+const Precise = require ('./base/Precise');
 
 //  ---------------------------------------------------------------------------
 
@@ -32,13 +33,14 @@ module.exports = class coinfalcon extends Exchange {
                 'fetchBorrowRateHistory': false,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
+                'fetchDepositAddress': true,
+                'fetchDepositAddresses': false,
                 'fetchDeposits': true,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchLeverageTiers': false,
                 'fetchMarkets': true,
@@ -54,11 +56,16 @@ module.exports = class coinfalcon extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': true,
                 'fetchTrades': true,
+                'fetchTradinFee': false,
+                'fetchTradingFees': true,
+                'fetchTransfer': false,
+                'fetchTransfers': false,
                 'fetchWithdrawals': true,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
                 'setPositionMode': false,
+                'transfer': false,
                 'withdraw': true,
             },
             'urls': {
@@ -415,6 +422,38 @@ module.exports = class coinfalcon extends Exchange {
         return this.parseTrades (data, market, since, limit);
     }
 
+    async fetchTradingFees (params = {}) {
+        await this.loadMarkets ();
+        const response = await this.privateGetUserFees (params);
+        //
+        //    {
+        //        data: {
+        //            maker_fee: '0.0',
+        //            taker_fee: '0.2',
+        //            btc_volume_30d: '0.0'
+        //        }
+        //    }
+        //
+        const data = this.safeValue (response, 'data', {});
+        const makerString = this.safeString (data, 'maker_fee');
+        const takerString = this.safeString (data, 'taker_fee');
+        const maker = this.parseNumber (Precise.stringDiv (makerString, '100'));
+        const taker = this.parseNumber (Precise.stringDiv (takerString, '100'));
+        const result = {};
+        for (let i = 0; i < this.symbols.length; i++) {
+            const symbol = this.symbols[i];
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': true,
+                'tierBased': true,
+            };
+        }
+        return result;
+    }
+
     parseBalance (response) {
         const result = { 'info': response };
         const balances = this.safeValue (response, 'data');
@@ -435,6 +474,44 @@ module.exports = class coinfalcon extends Exchange {
         await this.loadMarkets ();
         const response = await this.privateGetUserAccounts (params);
         return this.parseBalance (response);
+    }
+
+    parseDepositAddress (depositAddress, currency = undefined) {
+        //
+        //     {
+        //         "address":"0x77b5051f97efa9cc52c9ad5b023a53fc15c200d3",
+        //         "tag":"0"
+        //     }
+        //
+        const address = this.safeString (depositAddress, 'address');
+        const tag = this.safeString (depositAddress, 'tag');
+        this.checkAddress (address);
+        return {
+            'currency': this.safeCurrencyCode (undefined, currency),
+            'address': address,
+            'tag': tag,
+            'network': undefined,
+            'info': depositAddress,
+        };
+    }
+
+    async fetchDepositAddress (code, params = {}) {
+        await this.loadMarkets ();
+        const currency = this.safeCurrency (code);
+        const request = {
+            'currency': this.safeStringLower (currency, 'id'),
+        };
+        const response = await this.privateGetAccountDepositAddress (this.extend (request, params));
+        //
+        //     {
+        //         data: {
+        //             address: '0x9918987bbe865a1a9301dc736cf6cf3205956694',
+        //             tag:null
+        //         }
+        //     }
+        //
+        const data = this.safeValue (response, 'data', {});
+        return this.parseDepositAddress (data, currency);
     }
 
     parseOrderStatus (status) {
@@ -575,7 +652,7 @@ module.exports = class coinfalcon extends Exchange {
         let currency = undefined;
         if (code !== undefined) {
             currency = this.currency (code);
-            request['currency'] = currency['id'].toLowerCase ();
+            request['currency'] = this.safeStringLower (currency, 'id');
         }
         if (since !== undefined) {
             request['since_time'] = this.iso8601 (since);
@@ -612,7 +689,7 @@ module.exports = class coinfalcon extends Exchange {
         let currency = undefined;
         if (code !== undefined) {
             currency = this.currency (code);
-            request['currency'] = currency['id'].toLowerCase ();
+            request['currency'] = this.safeStringLower (currency, 'id');
         }
         if (since !== undefined) {
             request['since_time'] = this.iso8601 (since);
@@ -644,7 +721,7 @@ module.exports = class coinfalcon extends Exchange {
         await this.loadMarkets ();
         const currency = this.currency (code);
         const request = {
-            'currency': currency['id'].toLowerCase (),
+            'currency': this.safeStingLower (currency, 'id'),
             'address': address,
             'amount': amount,
             // 'tag': 'string', // withdraw tag/memo

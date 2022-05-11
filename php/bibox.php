@@ -47,6 +47,8 @@ class bibox extends Exchange {
                 'fetchTicker' => true,
                 'fetchTickers' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => false,
                 'fetchWithdrawals' => true,
                 'withdraw' => true,
             ),
@@ -105,8 +107,8 @@ class bibox extends Exchange {
                 'trading' => array(
                     'tierBased' => false,
                     'percentage' => true,
-                    'taker' => $this->parse_number('0.001'),
-                    'maker' => $this->parse_number('0.0008'),
+                    'taker' => $this->parse_number('0.002'),
+                    'maker' => $this->parse_number('0.001'),
                 ),
                 'funding' => array(
                     'tierBased' => false,
@@ -143,7 +145,7 @@ class bibox extends Exchange {
                 'APENFT(NFT)' => 'NFT',
                 'BOX' => 'DefiBox',
                 'BPT' => 'BlockPool Token',
-                'GTC' => 'Game.com',
+                'GMT' => 'GMT Token',
                 'KEY' => 'Bihu',
                 'MTC' => 'MTC Mesh Network', // conflict with MTC Docademic doc.com Token https://github.com/ccxt/ccxt/issues/6081 https://github.com/ccxt/ccxt/issues/3025
                 'NFT' => 'NFT Protocol',
@@ -815,7 +817,14 @@ class bibox extends Exchange {
         //         'status' => 3
         //     }
         //
-        $id = $this->safe_string($transaction, 'id');
+        // withdraw
+        //
+        //     {
+        //         "result" => 228, // withdrawal $id
+        //         "cmd":"transfer/transferOut"
+        //     }
+        //
+        $id = $this->safe_string_2($transaction, 'id', 'result');
         $address = $this->safe_string($transaction, 'to_address');
         $currencyId = $this->safe_string($transaction, 'coin_symbol');
         $code = $this->safe_currency_code($currencyId, $currency);
@@ -1284,7 +1293,7 @@ class bibox extends Exchange {
         //     {
         //         "result":array(
         //             {
-        //                 "result" => 228, // withdrawal $id
+        //                 "result" => 228, // withdrawal id
         //                 "cmd":"transfer/transferOut"
         //             }
         //         )
@@ -1292,11 +1301,7 @@ class bibox extends Exchange {
         //
         $outerResults = $this->safe_value($response, 'result');
         $firstResult = $this->safe_value($outerResults, 0, array());
-        $id = $this->safe_value($firstResult, 'result');
-        return array(
-            'info' => $response,
-            'id' => $id,
-        );
+        return $this->parse_transaction($firstResult, $currency);
     }
 
     public function fetch_funding_fees($codes = null, $params = array ()) {

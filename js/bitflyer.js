@@ -37,7 +37,12 @@ module.exports = class bitflyer extends Exchange {
                 'fetchPositions': true,
                 'fetchTicker': true,
                 'fetchTrades': true,
+                'fetchTradingFee': true,
+                'fetchTradingFees': false,
+                'fetchTransfer': false,
+                'fetchTransfers': false,
                 'fetchWithdrawals': true,
+                'transfer': false,
                 'withdraw': true,
             },
             'urls': {
@@ -179,13 +184,24 @@ module.exports = class bitflyer extends Exchange {
                 quoteId = this.safeString (currencies, 2);
             } else if (future) {
                 const alias = this.safeString (market, 'alias');
-                const splitAlias = alias.split ('_');
-                const currencyIds = this.safeString (splitAlias, 0);
-                baseId = currencyIds.slice (0, -3);
-                quoteId = currencyIds.slice (-3);
-                const splitId = id.split (currencyIds);
-                const expiryDate = this.safeString (splitId, 1);
-                expiry = this.parseExpiryDate (expiryDate);
+                if (alias === undefined) {
+                    // no alias:
+                    // { product_code: 'BTCJPY11MAR2022', market_type: 'Futures' }
+                    // TODO this will break if there are products with 4 chars
+                    baseId = id.slice (0, 3);
+                    quoteId = id.slice (3, 6);
+                    // last 9 chars are expiry date
+                    const expiryDate = id.slice (-9);
+                    expiry = this.parseExpiryDate (expiryDate);
+                } else {
+                    const splitAlias = alias.split ('_');
+                    const currencyIds = this.safeString (splitAlias, 0);
+                    baseId = currencyIds.slice (0, -3);
+                    quoteId = currencyIds.slice (-3);
+                    const splitId = id.split (currencyIds);
+                    const expiryDate = this.safeString (splitId, 1);
+                    expiry = this.parseExpiryDate (expiryDate);
+                }
                 type = 'future';
             }
             const base = this.safeCurrencyCode (baseId);
@@ -416,6 +432,27 @@ module.exports = class bitflyer extends Exchange {
         return this.parseTrades (response, market, since, limit);
     }
 
+    async fetchTradingFee (symbol, params = {}) {
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request = {
+            'product_code': market['id'],
+        };
+        const response = await this.privateGetGettradingcommission (this.extend (request, params));
+        //
+        //   {
+        //       commission_rate: '0.0020'
+        //   }
+        //
+        const fee = this.safeNumber (response, 'commission_rate');
+        return {
+            'info': response,
+            'symbol': symbol,
+            'maker': fee,
+            'taker': fee,
+        };
+    }
+
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
         await this.loadMarkets ();
         const request = {
@@ -606,11 +643,12 @@ module.exports = class bitflyer extends Exchange {
             // 'bank_account_id': 1234,
         };
         const response = await this.privatePostWithdraw (this.extend (request, params));
-        const id = this.safeString (response, 'message_id');
-        return {
-            'info': response,
-            'id': id,
-        };
+        //
+        //     {
+        //         "message_id": "69476620-5056-4003-bcbe-42658a2b041b"
+        //     }
+        //
+        return this.parseTransaction (response, currency);
     }
 
     async fetchDeposits (code = undefined, since = undefined, limit = undefined, params = {}) {
@@ -624,18 +662,20 @@ module.exports = class bitflyer extends Exchange {
             request['count'] = limit; // default 100
         }
         const response = await this.privateGetGetcoinins (this.extend (request, params));
-        // [
-        //   {
-        //     "id": 100,
-        //     "order_id": "CDP20151227-024141-055555",
-        //     "currency_code": "BTC",
-        //     "amount": 0.00002,
-        //     "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
-        //     "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
-        //     "status": "COMPLETED",
-        //     "event_date": "2015-11-27T08:59:20.301"
-        //   }
-        // ]
+        //
+        //     [
+        //         {
+        //             "id": 100,
+        //             "order_id": "CDP20151227-024141-055555",
+        //             "currency_code": "BTC",
+        //             "amount": 0.00002,
+        //             "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
+        //             "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
+        //             "status": "COMPLETED",
+        //             "event_date": "2015-11-27T08:59:20.301"
+        //         }
+        //     ]
+        //
         return this.parseTransactions (response, currency, since, limit);
     }
 
@@ -651,20 +691,20 @@ module.exports = class bitflyer extends Exchange {
         }
         const response = await this.privateGetGetcoinouts (this.extend (request, params));
         //
-        // [
-        //   {
-        //     "id": 500,
-        //     "order_id": "CWD20151224-014040-077777",
-        //     "currency_code": "BTC",
-        //     "amount": 0.1234,
-        //     "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-        //     "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
-        //     "fee": 0.0005,
-        //     "additional_fee": 0.0001,
-        //     "status": "COMPLETED",
-        //     "event_date": "2015-12-24T01:40:40.397"
-        //   }
-        // ]
+        //     [
+        //         {
+        //             "id": 500,
+        //             "order_id": "CWD20151224-014040-077777",
+        //             "currency_code": "BTC",
+        //             "amount": 0.1234,
+        //             "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        //             "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
+        //             "fee": 0.0005,
+        //             "additional_fee": 0.0001,
+        //             "status": "COMPLETED",
+        //             "event_date": "2015-12-24T01:40:40.397"
+        //         }
+        //     ]
         //
         return this.parseTransactions (response, currency, since, limit);
     }
@@ -689,33 +729,39 @@ module.exports = class bitflyer extends Exchange {
         //
         // fetchDeposits
         //
-        //   {
-        //     "id": 100,
-        //     "order_id": "CDP20151227-024141-055555",
-        //     "currency_code": "BTC",
-        //     "amount": 0.00002,
-        //     "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
-        //     "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
-        //     "status": "COMPLETED",
-        //     "event_date": "2015-11-27T08:59:20.301"
-        //   }
+        //     {
+        //         "id": 100,
+        //         "order_id": "CDP20151227-024141-055555",
+        //         "currency_code": "BTC",
+        //         "amount": 0.00002,
+        //         "address": "1WriteySQufKZ2pVuM1oMhPrTtTVFq35j",
+        //         "tx_hash": "9f92ee65a176bb9545f7becb8706c50d07d4cee5ffca34d8be3ef11d411405ae",
+        //         "status": "COMPLETED",
+        //         "event_date": "2015-11-27T08:59:20.301"
+        //     }
         //
         // fetchWithdrawals
         //
-        //   {
-        //     "id": 500,
-        //     "order_id": "CWD20151224-014040-077777",
-        //     "currency_code": "BTC",
-        //     "amount": 0.1234,
-        //     "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-        //     "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
-        //     "fee": 0.0005,
-        //     "additional_fee": 0.0001,
-        //     "status": "COMPLETED",
-        //     "event_date": "2015-12-24T01:40:40.397"
-        //   }
+        //     {
+        //         "id": 500,
+        //         "order_id": "CWD20151224-014040-077777",
+        //         "currency_code": "BTC",
+        //         "amount": 0.1234,
+        //         "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        //         "tx_hash": "724c07dfd4044abcb390b0412c3e707dd5c4f373f0a52b3bd295ce32b478c60a",
+        //         "fee": 0.0005,
+        //         "additional_fee": 0.0001,
+        //         "status": "COMPLETED",
+        //         "event_date": "2015-12-24T01:40:40.397"
+        //     }
         //
-        const id = this.safeString (transaction, 'id');
+        // withdraw
+        //
+        //     {
+        //         "message_id": "69476620-5056-4003-bcbe-42658a2b041b"
+        //     }
+        //
+        const id = this.safeString2 (transaction, 'id', 'message_id');
         const address = this.safeString (transaction, 'address');
         const currencyId = this.safeString (transaction, 'currency_code');
         const code = this.safeCurrencyCode (currencyId, currency);

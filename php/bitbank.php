@@ -40,7 +40,6 @@ class bitbank extends Exchange {
                 'fetchFundingRateHistory' => false,
                 'fetchFundingRates' => false,
                 'fetchIndexOHLCV' => false,
-                'fetchIsolatedPositions' => false,
                 'fetchLeverage' => false,
                 'fetchLeverageTiers' => false,
                 'fetchMarkOHLCV' => false,
@@ -55,10 +54,15 @@ class bitbank extends Exchange {
                 'fetchPremiumIndexOHLCV' => false,
                 'fetchTicker' => true,
                 'fetchTrades' => true,
+                'fetchTradingFee' => false,
+                'fetchTradingFees' => true,
+                'fetchTransfer' => false,
+                'fetchTransfers' => false,
                 'reduceMargin' => false,
                 'setLeverage' => false,
                 'setMarginMode' => false,
                 'setPositionMode' => false,
+                'transfer' => false,
                 'withdraw' => true,
             ),
             'timeframes' => array(
@@ -327,6 +331,57 @@ class bitbank extends Exchange {
         return $this->parse_trades($trades, $market, $since, $limit);
     }
 
+    public function fetch_trading_fees($params = array ()) {
+        $this->load_markets();
+        $response = $this->marketsGetSpotPairs ($params);
+        //
+        //     {
+        //         success => '1',
+        //         $data => {
+        //           $pairs => array(
+        //             array(
+        //               name => 'btc_jpy',
+        //               base_asset => 'btc',
+        //               quote_asset => 'jpy',
+        //               maker_fee_rate_base => '0',
+        //               taker_fee_rate_base => '0',
+        //               maker_fee_rate_quote => '-0.0002',
+        //               taker_fee_rate_quote => '0.0012',
+        //               unit_amount => '0.0001',
+        //               limit_max_amount => '1000',
+        //               market_max_amount => '10',
+        //               market_allowance_rate => '0.2',
+        //               price_digits => '0',
+        //               amount_digits => '4',
+        //               is_enabled => true,
+        //               stop_order => false,
+        //               stop_order_and_cancel => false
+        //             ),
+        //             ...
+        //           )
+        //         }
+        //     }
+        //
+        $data = $this->safe_value($response, 'data', array());
+        $pairs = $this->safe_value($data, 'pairs', array());
+        $result = array();
+        for ($i = 0; $i < count($pairs); $i++) {
+            $pair = $pairs[$i];
+            $marketId = $this->safe_string($pair, 'name');
+            $market = $this->safe_market($marketId);
+            $symbol = $market['symbol'];
+            $result[$symbol] = array(
+                'info' => $pair,
+                'symbol' => $symbol,
+                'maker' => $this->safe_number($pair, 'maker_fee_rate_quote'),
+                'taker' => $this->safe_number($pair, 'taker_fee_rate_quote'),
+                'percentage' => true,
+                'tierBased' => false,
+            );
+        }
+        return $result;
+    }
+
     public function parse_ohlcv($ohlcv, $market = null) {
         //
         //     array(
@@ -350,7 +405,7 @@ class bitbank extends Exchange {
 
     public function fetch_ohlcv($symbol, $timeframe = '5m', $since = null, $limit = null, $params = array ()) {
         if ($since === null) {
-            throw new ArgumentsRequired($this->id . ' fetchOHLCV requires a $since argument');
+            throw new ArgumentsRequired($this->id . ' fetchOHLCV() requires a $since argument');
         }
         $this->load_markets();
         $market = $this->market($symbol);
@@ -606,11 +661,66 @@ class bitbank extends Exchange {
             'amount' => $amount,
         );
         $response = $this->privatePostUserRequestWithdrawal (array_merge($request, $params));
+        //
+        //     {
+        //         "success" => 1,
+        //         "data" => {
+        //             "uuid" => "string",
+        //             "asset" => "btc",
+        //             "amount" => 0,
+        //             "account_uuid" => "string",
+        //             "fee" => 0,
+        //             "status" => "DONE",
+        //             "label" => "string",
+        //             "txid" => "string",
+        //             "address" => "string",
+        //             "requested_at" => 0
+        //         }
+        //     }
+        //
         $data = $this->safe_value($response, 'data', array());
-        $txid = $this->safe_string($data, 'txid');
+        return $this->parse_transaction($data, $currency);
+    }
+
+    public function parse_transaction($transaction, $currency = null) {
+        //
+        // withdraw
+        //
+        //     {
+        //         "uuid" => "string",
+        //         "asset" => "btc",
+        //         "amount" => 0,
+        //         "account_uuid" => "string",
+        //         "fee" => 0,
+        //         "status" => "DONE",
+        //         "label" => "string",
+        //         "txid" => "string",
+        //         "address" => "string",
+        //         "requested_at" => 0
+        //     }
+        //
+        $txid = $this->safe_string($transaction, 'txid');
+        $currency = $this->safe_currency(null, $currency);
         return array(
-            'info' => $response,
             'id' => $txid,
+            'txid' => $txid,
+            'timestamp' => null,
+            'datetime' => null,
+            'network' => null,
+            'addressFrom' => null,
+            'address' => null,
+            'addressTo' => null,
+            'amount' => null,
+            'type' => null,
+            'currency' => $currency['code'],
+            'status' => null,
+            'updated' => null,
+            'tagFrom' => null,
+            'tag' => null,
+            'tagTo' => null,
+            'comment' => null,
+            'fee' => null,
+            'info' => $transaction,
         );
     }
 

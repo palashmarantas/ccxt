@@ -31,7 +31,7 @@ class bitvavo(Exchange):
             'id': 'bitvavo',
             'name': 'Bitvavo',
             'countries': ['NL'],  # Netherlands
-            'rateLimit': 60.1,  # 1000 requests per second
+            'rateLimit': 60,  # 1000 requests per minute
             'version': 'v2',
             'certified': True,
             'pro': True,
@@ -47,6 +47,9 @@ class bitvavo(Exchange):
                 'cancelOrder': True,
                 'createOrder': True,
                 'createReduceOnlyOrder': False,
+                'createStopLimitOrder': True,
+                'createStopMarketOrder': True,
+                'createStopOrder': True,
                 'editOrder': True,
                 'fetchBalance': True,
                 'fetchBorrowRate': False,
@@ -62,7 +65,6 @@ class bitvavo(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
                 'fetchLeverageTiers': False,
                 'fetchMarkets': True,
@@ -81,11 +83,16 @@ class bitvavo(Exchange):
                 'fetchTickers': True,
                 'fetchTime': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': True,
+                'fetchTransfer': False,
+                'fetchTransfers': False,
                 'fetchWithdrawals': True,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
                 'setPositionMode': False,
+                'transfer': False,
                 'withdraw': True,
             },
             'timeframes': {
@@ -128,6 +135,7 @@ class bitvavo(Exchange):
                 },
                 'private': {
                     'get': {
+                        'account': 1,
                         'order': 1,
                         'orders': 5,
                         'ordersOpen': {'cost': 1, 'noMarket': 25},
@@ -159,25 +167,25 @@ class bitvavo(Exchange):
                     'tiers': {
                         'taker': [
                             [self.parse_number('0'), self.parse_number('0.0025')],
-                            [self.parse_number('50000'), self.parse_number('0.0024')],
-                            [self.parse_number('100000'), self.parse_number('0.0022')],
-                            [self.parse_number('250000'), self.parse_number('0.0020')],
-                            [self.parse_number('500000'), self.parse_number('0.0018')],
-                            [self.parse_number('1000000'), self.parse_number('0.0016')],
-                            [self.parse_number('2500000'), self.parse_number('0.0014')],
-                            [self.parse_number('5000000'), self.parse_number('0.0012')],
-                            [self.parse_number('10000000'), self.parse_number('0.0010')],
+                            [self.parse_number('100000'), self.parse_number('0.0020')],
+                            [self.parse_number('250000'), self.parse_number('0.0016')],
+                            [self.parse_number('500000'), self.parse_number('0.0012')],
+                            [self.parse_number('1000000'), self.parse_number('0.0010')],
+                            [self.parse_number('2500000'), self.parse_number('0.0008')],
+                            [self.parse_number('5000000'), self.parse_number('0.0006')],
+                            [self.parse_number('10000000'), self.parse_number('0.0005')],
+                            [self.parse_number('25000000'), self.parse_number('0.0004')],
                         ],
                         'maker': [
-                            [self.parse_number('0'), self.parse_number('0.0020')],
-                            [self.parse_number('50000'), self.parse_number('0.0015')],
+                            [self.parse_number('0'), self.parse_number('0.0015')],
                             [self.parse_number('100000'), self.parse_number('0.0010')],
-                            [self.parse_number('250000'), self.parse_number('0.0006')],
-                            [self.parse_number('500000'), self.parse_number('0.0003')],
-                            [self.parse_number('1000000'), self.parse_number('0.0001')],
-                            [self.parse_number('2500000'), self.parse_number('-0.0001')],
-                            [self.parse_number('5000000'), self.parse_number('-0.0003')],
-                            [self.parse_number('10000000'), self.parse_number('-0.0005')],
+                            [self.parse_number('250000'), self.parse_number('0.0008')],
+                            [self.parse_number('500000'), self.parse_number('0.0006')],
+                            [self.parse_number('1000000'), self.parse_number('0.0005')],
+                            [self.parse_number('2500000'), self.parse_number('0.0004')],
+                            [self.parse_number('5000000'), self.parse_number('0.0004')],
+                            [self.parse_number('10000000'), self.parse_number('0.0003')],
+                            [self.parse_number('25000000'), self.parse_number('0.0003')],
                         ],
                     },
                 },
@@ -271,8 +279,8 @@ class bitvavo(Exchange):
             },
         })
 
-    def currency_to_precision(self, currency, fee):
-        return self.decimal_to_precision(fee, 0, self.currencies[currency]['precision'])
+    def currency_to_precision(self, code, fee):
+        return self.decimal_to_precision(fee, 0, self.currencies[code]['precision'])
 
     def amount_to_precision(self, symbol, amount):
         # https://docs.bitfinex.com/docs/introduction#amount-precision
@@ -665,6 +673,34 @@ class bitvavo(Exchange):
             'fee': fee,
         }, market)
 
+    async def fetch_trading_fees(self, params={}):
+        await self.load_markets()
+        response = await self.privateGetAccount(params)
+        #
+        #     {
+        #         "fees": {
+        #           "taker": "0.0025",
+        #           "maker": "0.0015",
+        #           "volume": "10000.00"
+        #         }
+        #     }
+        #
+        fees = self.safe_value(response, 'fees')
+        maker = self.safe_number(fees, 'maker')
+        taker = self.safe_number(fees, 'taker')
+        result = {}
+        for i in range(0, len(self.symbols)):
+            symbol = self.symbols[i]
+            result[symbol] = {
+                'info': response,
+                'symbol': symbol,
+                'maker': maker,
+                'taker': taker,
+                'percentage': True,
+                'tierBased': True,
+            }
+        return result
+
     async def fetch_order_book(self, symbol, limit=None, params={}):
         await self.load_markets()
         request = {
@@ -833,10 +869,10 @@ class bitvavo(Exchange):
             stopPrice = self.safe_number_2(params, 'stopPrice', 'triggerAmount')
             if stopPrice is None:
                 if isStopLimit:
-                    raise ArgumentsRequired(self.id + ' createOrder requires a stopPrice parameter for a ' + type + ' order')
+                    raise ArgumentsRequired(self.id + ' createOrder() requires a stopPrice parameter for a ' + type + ' order')
                 elif isStopMarket:
                     if price is None:
-                        raise ArgumentsRequired(self.id + ' createOrder requires a price argument or a stopPrice parameter for a ' + type + ' order')
+                        raise ArgumentsRequired(self.id + ' createOrder() requires a price argument or a stopPrice parameter for a ' + type + ' order')
                     else:
                         stopPrice = price
             if isStopLimit:

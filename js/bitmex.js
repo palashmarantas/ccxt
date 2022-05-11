@@ -50,6 +50,9 @@ module.exports = class bitmex extends Exchange {
                 'fetchTickers': true,
                 'fetchTrades': true,
                 'fetchTransactions': 'emulated',
+                'fetchTransfer': false,
+                'fetchTransfers': false,
+                'transfer': false,
                 'withdraw': true,
             },
             'timeframes': {
@@ -958,11 +961,8 @@ module.exports = class bitmex extends Exchange {
     async fetchTicker (symbol, params = {}) {
         await this.loadMarkets ();
         const market = this.market (symbol);
-        if (!market['active']) {
-            throw new BadSymbol (this.id + ' fetchTicker() symbol ' + symbol + ' is not tradable');
-        }
-        const tickers = await this.fetchTickers ([ symbol ], params);
-        const ticker = this.safeValue (tickers, symbol);
+        const tickers = await this.fetchTickers ([ market['symbol'] ], params);
+        const ticker = this.safeValue (tickers, market['symbol']);
         if (ticker === undefined) {
             throw new BadSymbol (this.id + ' fetchTicker() symbol ' + symbol + ' not found');
         }
@@ -980,7 +980,15 @@ module.exports = class bitmex extends Exchange {
                 result[symbol] = ticker;
             }
         }
-        return this.filterByArray (result, 'symbol', symbols);
+        const uniformSymbols = [];
+        if (symbols !== undefined) {
+            for (let i = 0; i < symbols.length; i++) {
+                const symbol = symbols[i];
+                const market = this.market (symbol);
+                uniformSymbols.push (market['symbol']);
+            }
+        }
+        return this.filterByArray (result, 'symbol', uniformSymbols);
     }
 
     parseTicker (ticker, market = undefined) {
@@ -1726,6 +1734,7 @@ module.exports = class bitmex extends Exchange {
         if (code !== 'BTC') {
             throw new ExchangeError (this.id + ' supoprts BTC withdrawals only, other currencies coming soon...');
         }
+        const currency = this.currency (code);
         const request = {
             'currency': 'XBt', // temporarily
             'amount': amount,
@@ -1734,10 +1743,7 @@ module.exports = class bitmex extends Exchange {
             // 'fee': 0.001, // bitcoin network fee
         };
         const response = await this.privatePostUserRequestWithdrawal (this.extend (request, params));
-        return {
-            'info': response,
-            'id': this.safeString (response, 'transactID'),
-        };
+        return this.parseTransaction (response, currency);
     }
 
     handleErrors (code, reason, url, method, headers, body, response, requestHeaders, requestBody) {
@@ -1778,7 +1784,8 @@ module.exports = class bitmex extends Exchange {
             }
         }
         const url = this.urls['api'][api] + query;
-        if (this.apiKey && this.secret) {
+        if (api === 'private') {
+            this.checkRequiredCredentials ();
             let auth = method + query;
             let expires = this.safeInteger (this.options, 'api-expires');
             headers = {

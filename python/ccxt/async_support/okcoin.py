@@ -4,13 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.async_support.base.exchange import Exchange
-
-# -----------------------------------------------------------------------------
-
-try:
-    basestring  # Python 3
-except NameError:
-    basestring = str  # Python 2
 import hashlib
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -44,7 +37,9 @@ class okcoin(Exchange):
             'name': 'OKCoin',
             'countries': ['CN', 'US'],
             'version': 'v3',
-            'rateLimit': 1000,  # up to 3000 requests per 5 minutes ≈ 600 requests per minute ≈ 10 requests per second ≈ 100 ms
+            # cheapest endpoint is 100 requests per 2 seconds
+            # 50 requests per second => 1000 / 50 = 20ms
+            'rateLimit': 20,
             'pro': True,
             'has': {
                 'CORS': None,
@@ -77,6 +72,7 @@ class okcoin(Exchange):
                 'fetchTrades': True,
                 'fetchTransactions': None,
                 'fetchWithdrawals': True,
+                'transfer': True,
                 'withdraw': True,
             },
             'timeframes': {
@@ -113,91 +109,157 @@ class okcoin(Exchange):
             },
             'api': {
                 'general': {
-                    'get': [
-                        'time',
-                    ],
+                    'get': {
+                        'time': 8.3334,
+                    },
                 },
                 'account': {
-                    'get': [
-                        'wallet',
-                        'sub-account',
-                        'asset-valuation',
-                        'wallet/{currency}',
-                        'withdrawal/history',
-                        'withdrawal/history/{currency}',
-                        'ledger',
-                        'deposit/address',
-                        'deposit/history',
-                        'deposit/history/{currency}',
-                        'currencies',
-                        'withdrawal/fee',
-                    ],
-                    'post': [
-                        'transfer',
-                        'withdrawal',
-                    ],
+                    'get': {
+                        'wallet': 8.3334,
+                        'sub-account': 1000,
+                        'asset-valuation': 1000,
+                        'wallet/{currency}': 8.3334,
+                        'withdrawal/history': 8.3334,
+                        'withdrawal/history/{currency}': 8.3334,
+                        'ledger': 5,
+                        'deposit/address': 8.3334,
+                        'deposit/history': 8.3334,
+                        'deposit/history/{currency}': 8.3334,
+                        'currencies': 8.3334,
+                        'withdrawal/fee': 8.3334,
+                        'deposit-lightning': 50,
+                        'withdrawal-lightning': 50,
+                        'fiat/deposit/detail': 5,
+                        'fiat/deposit/details': 8.3334,
+                        'fiat/withdraw/detail': 5,
+                        'fiat/withdraw/details': 8.3334,
+                        'fiat/channel': 8.3334,
+                    },
+                    'post': {
+                        'transfer': 100,  # 1 request per 2 seconds(per currency)
+                        'withdrawal': 8.3334,
+                        'fiat/cancel_deposit': 1,
+                        'fiat/deposit': 8.3334,
+                        'fiat/withdraw': 8.3334,
+                        'fiat/cancel_withdrawal': 1,
+                    },
+                },
+                # TODO fix signing issue in sign()
+                # all other endpoints of the format
+                # api/account/v3/wallet
+                # otc endpoints actually of the format: (exchanged places)
+                # api/v3/otc/rfq/instruments
+                'otc': {
+                    'get': {
+                        'rfq/instruments': 50,  # represents: GET api/v3/otc/rfq/instruments
+                        'rfq/trade': 50,
+                        'rfq/history': 50,
+                    },
+                    'post': {
+                        'rfq/quote': 50,
+                        'rfq/trade': 50,
+                    },
+                },
+                # TODO fix signing issue as above
+                'users': {
+                    'get': {
+                        'subaccount-info': 20,
+                        'account-info': 20,
+                        'subaccount/apikey': 20,
+                    },
+                    'post': {
+                        'create-subaccount': 5,  # represents: POST api/v3/users/create-subaccount
+                        'delete-subaccount': 5,
+                        'subaccount/apikey': 50,
+                        'subacount/delete-apikey': 20,
+                        'subacount/modify-apikey': 20,
+                    },
+                },
+                'earning': {
+                    'get': {
+                        'offers': 5,
+                        'orders': 5,
+                        'positions': 8.3334,
+                    },
+                    'post': {
+                        'purchase': 5,
+                        'redeem': 5,
+                        'cancel': 5,
+                    },
                 },
                 'spot': {
-                    'get': [
-                        'accounts',
-                        'accounts/{currency}',
-                        'accounts/{currency}/ledger',
-                        'orders',
-                        'amend_order/{instrument_id}',
-                        'orders_pending',
-                        'orders/{order_id}',
-                        'orders/{client_oid}',
-                        'trade_fee',
-                        'fills',
-                        'algo',
+                    'get': {
+                        'accounts': 5,
+                        'accounts/{currency}': 5,
+                        'accounts/{currency}/ledger': 5,
+                        'orders': 10,
+                        'orders_pending': 5,
+                        'orders/{order_id}': 5,
+                        'orders/{client_oid}': 5,
+                        'trade_fee': 5,
+                        'fills': 10,
+                        'algo': 5,
                         # public
-                        'instruments',
-                        'instruments/{instrument_id}/book',
-                        'instruments/ticker',
-                        'instruments/{instrument_id}/ticker',
-                        'instruments/{instrument_id}/trades',
-                        'instruments/{instrument_id}/candles',
-                        'instruments/{instrument_id}/history/candles',
-                    ],
-                    'post': [
-                        'order_algo',
-                        'orders',
-                        'batch_orders',
-                        'cancel_orders/{order_id}',
-                        'cancel_orders/{client_oid}',
-                        'cancel_batch_algos',
-                        'cancel_batch_orders',
-                    ],
+                        'instruments': 5,
+                        'instruments/{instrument_id}/book': 5,
+                        'instruments/ticker': 5,
+                        'instruments/{instrument_id}/ticker': 5,
+                        'instruments/{instrument_id}/trades': 5,
+                        'instruments/{instrument_id}/candles': 5,
+                    },
+                    'post': {
+                        'order_algo': 2.5,
+                        'orders': 1,
+                        'batch_orders': 2,
+                        'cancel_orders/{order_id}': 1,
+                        'cancel_orders/{client_oid}': 1,
+                        'cancel_batch_algos': 5,
+                        'cancel_batch_orders': 5,
+                        'amend_order/{instrument_id}': 2.5,
+                        'amend_batch_orders': 5,
+                    },
                 },
                 'margin': {
-                    'get': [
-                        'accounts',
-                        'accounts/{instrument_id}',
-                        'accounts/{instrument_id}/ledger',
-                        'accounts/availability',
-                        'accounts/{instrument_id}/availability',
-                        'accounts/borrowed',
-                        'accounts/{instrument_id}/borrowed',
-                        'orders',
-                        'accounts/{instrument_id}/leverage',
-                        'orders/{order_id}',
-                        'orders/{client_oid}',
-                        'orders_pending',
-                        'fills',
+                    'get': {
+                        'accounts': 5,
+                        'accounts/{instrument_id}': 5,
+                        'accounts/{instrument_id}/ledger': 5,
+                        'accounts/availability': 5,
+                        'accounts/{instrument_id}/availability': 5,
+                        'accounts/borrowed': 5,
+                        'accounts/{instrument_id}/borrowed': 5,
+                        'orders': 10,
+                        'accounts/{instrument_id}/leverage': 1,
+                        'orders/{order_id}': 5,
+                        'orders/{client_oid}': 5,
+                        'orders_pending': 5,
+                        'fills': 10,
                         # public
-                        'instruments/{instrument_id}/mark_price',
-                    ],
-                    'post': [
-                        'accounts/borrow',
-                        'accounts/repayment',
-                        'orders',
-                        'batch_orders',
-                        'cancel_orders',
-                        'cancel_orders/{order_id}',
-                        'cancel_orders/{client_oid}',
-                        'cancel_batch_orders',
-                        'accounts/{instrument_id}/leverage',
-                    ],
+                        'instruments/{instrument_id}/mark_price': 5,
+                    },
+                    'post': {
+                        'accounts/borrow': 1,
+                        'accounts/repayment': 1,
+                        'orders': 1,
+                        'batch_orders': 2,
+                        'cancel_orders': 1,
+                        'cancel_orders/{order_id}': 1,
+                        'cancel_orders/{client_oid}': 1,
+                        'cancel_batch_orders': 2,
+                        'amend_order/{instrument_id}': 2.5,
+                        'amend_batch_orders': 5,
+                        'accounts/{instrument_id}/leverage': 1,
+                    },
+                },
+                'system': {
+                    'get': {
+                        'status': 250,
+                    },
+                },
+                'market': {
+                    'get': {
+                        'oracle': 250,
+                    },
                 },
                 'futures': {
                     'get': [
@@ -706,6 +768,16 @@ class okcoin(Exchange):
                 'createMarketBuyOrderRequiresPrice': True,
                 'fetchMarkets': ['spot'],
                 'defaultType': 'spot',  # 'account', 'spot', 'margin', 'futures', 'swap', 'option'
+                'accountsByType': {
+                    'spot': '1',
+                    'margin': '5',
+                    'funding': '6',
+                },
+                'accountsById': {
+                    '1': 'spot',
+                    '5': 'margin',
+                    '6': 'funding',
+                },
                 'auth': {
                     'time': 'public',
                     'currencies': 'private',
@@ -1016,7 +1088,7 @@ class okcoin(Exchange):
             #
             return self.parse_markets(response)
         else:
-            raise NotSupported(self.id + ' fetchMarketsByType does not support market type ' + type)
+            raise NotSupported(self.id + ' fetchMarketsByType() does not support market type ' + type)
 
     async def fetch_currencies(self, params={}):
         # despite that their docs say these endpoints are public:
@@ -1288,29 +1360,26 @@ class okcoin(Exchange):
         priceString = self.safe_string(trade, 'price')
         amountString = self.safe_string_2(trade, 'size', 'qty')
         amountString = self.safe_string(trade, 'order_qty', amountString)
-        price = self.parse_number(priceString)
-        amount = self.parse_number(amountString)
-        cost = self.parse_number(Precise.string_mul(priceString, amountString))
         takerOrMaker = self.safe_string_2(trade, 'exec_type', 'liquidity')
         if takerOrMaker == 'M':
             takerOrMaker = 'maker'
         elif takerOrMaker == 'T':
             takerOrMaker = 'taker'
         side = self.safe_string(trade, 'side')
-        feeCost = self.safe_number(trade, 'fee')
+        feeCostString = self.safe_string(trade, 'fee')
         fee = None
-        if feeCost is not None:
+        if feeCostString is not None:
             feeCurrency = base if (side == 'buy') else quote
             fee = {
                 # fee is either a positive number(invitation rebate)
                 # or a negative number(transaction fee deduction)
                 # therefore we need to invert the fee
                 # more about it https://github.com/ccxt/ccxt/issues/5909
-                'cost': -feeCost,
+                'cost': Precise.string_neg(feeCostString),
                 'currency': feeCurrency,
             }
         orderId = self.safe_string(trade, 'order_id')
-        return {
+        return self.safe_trade({
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
@@ -1320,11 +1389,11 @@ class okcoin(Exchange):
             'type': None,
             'takerOrMaker': takerOrMaker,
             'side': side,
-            'price': price,
-            'amount': amount,
-            'cost': cost,
+            'price': priceString,
+            'amount': amountString,
+            'cost': None,
             'fee': fee,
-        }
+        }, market)
 
     async def fetch_trades(self, symbol, since=None, limit=None, params={}):
         await self.load_markets()
@@ -1397,7 +1466,7 @@ class okcoin(Exchange):
             numElements = len(ohlcv)
             volumeIndex = 6 if (numElements > 6) else 5
             timestamp = self.safe_value(ohlcv, 0)
-            if isinstance(timestamp, basestring):
+            if isinstance(timestamp, str):
                 timestamp = self.parse8601(timestamp)
             return [
                 timestamp,  # timestamp
@@ -1444,7 +1513,7 @@ class okcoin(Exchange):
                     request['end'] = self.iso8601(now)
         elif type == 'HistoryCandles':
             if market['option']:
-                raise NotSupported(self.id + ' fetchOHLCV does not have ' + type + ' for ' + market['type'] + ' markets')
+                raise NotSupported(self.id + ' fetchOHLCV() does not have ' + type + ' for ' + market['type'] + ' markets')
             if since is not None:
                 if limit is None:
                     limit = 300  # default
@@ -2424,8 +2493,87 @@ class okcoin(Exchange):
         addressesByCode = self.parse_deposit_addresses(response)
         address = self.safe_value(addressesByCode, code)
         if address is None:
-            raise InvalidAddress(self.id + ' fetchDepositAddress cannot return nonexistent addresses, you should create withdrawal addresses with the exchange website first')
+            raise InvalidAddress(self.id + ' fetchDepositAddress() cannot return nonexistent addresses, you should create withdrawal addresses with the exchange website first')
         return address
+
+    async def transfer(self, code, amount, fromAccount, toAccount, params={}):
+        await self.load_markets()
+        currency = self.currency(code)
+        accountsByType = self.safe_value(self.options, 'accountsByType', {})
+        fromId = self.safe_string(accountsByType, fromAccount, fromAccount)
+        toId = self.safe_string(accountsByType, toAccount, toAccount)
+        request = {
+            'amount': self.currency_to_precision(code, amount),
+            'currency': currency['id'],
+            'from': fromId,  # 1 spot, 5 margin, 6 funding
+            'to': toId,  # 1 spot, 5 margin, 6 funding
+            'type': '0',  # 0 Transfer between accounts in the main account/sub_account, 1 main account to sub_account, 2 sub_account to main account
+        }
+        if fromId == 'main':
+            request['type'] = '1'
+            request['sub_account'] = toId
+            request['to'] = '0'
+        elif toId == 'main':
+            request['type'] = '2'
+            request['sub_account'] = fromId
+            request['from'] = '0'
+            request['to'] = '6'
+        elif fromId == '5' or toId == '5':
+            marketId = self.safe_string_2(params, 'instrument_id', 'to_instrument_id')
+            if marketId is None:
+                symbol = self.safe_string(params, 'symbol')
+                if symbol is None:
+                    raise ArgumentsRequired(self.id + ' transfer() requires an exchange-specific instrument_id parameter or a unified symbol parameter')
+                else:
+                    params = self.omit(params, 'symbol')
+                    market = self.market(symbol)
+                    marketId = market['id']
+                if fromId == '5':
+                    request['instrument_id'] = marketId
+                if toId == '5':
+                    request['to_instrument_id'] = marketId
+        response = await self.accountPostTransfer(self.extend(request, params))
+        #
+        #      {
+        #          "transfer_id": "754147",
+        #          "currency": "ETC",
+        #          "from": "6",
+        #          "amount": "0.1",
+        #          "to": "1",
+        #          "result": True
+        #      }
+        #
+        return self.parse_transfer(response, currency)
+
+    def parse_transfer(self, transfer, currency=None):
+        #
+        #      {
+        #          "transfer_id": "754147",
+        #          "currency": "ETC",
+        #          "from": "6",
+        #          "amount": "0.1",
+        #          "to": "1",
+        #          "result": True
+        #      }
+        #
+        accountsById = self.safe_value(self.options, 'accountsById', {})
+        return {
+            'info': transfer,
+            'id': self.safe_string(transfer, 'transfer_id'),
+            'timestamp': None,
+            'datetime': None,
+            'currency': self.safe_currency_code(self.safe_string(transfer, 'currency'), currency),
+            'amount': self.safe_number(transfer, 'amount'),
+            'fromAccount': self.safe_string(accountsById, self.safe_string(transfer, 'from')),
+            'toAccount': self.safe_string(accountsById, self.safe_string(transfer, 'to')),
+            'status': self.parse_transfer_status(self.safe_string(transfer, 'result')),
+        }
+
+    def parse_transfer_status(self, status):
+        statuses = {
+            'true': 'ok',
+        }
+        return self.safe_string(statuses, status, 'failed')
 
     async def withdraw(self, code, amount, address, tag=None, params={}):
         tag, params = self.handle_withdraw_tag_and_params(tag, params)
@@ -2462,10 +2610,7 @@ class okcoin(Exchange):
         #         "result":true
         #     }
         #
-        return {
-            'info': response,
-            'id': self.safe_string(response, 'withdrawal_id'),
-        }
+        return self.parse_transaction(response, currency)
 
     async def fetch_deposits(self, code=None, since=None, limit=None, params={}):
         await self.load_markets()
@@ -2638,24 +2783,24 @@ class okcoin(Exchange):
         symbol = market['symbol']
         quoteId = market['quoteId']
         side = None
-        amount = None
-        cost = None
+        amountString = None
+        costString = None
         receivedCurrencyId = self.safe_string(userTrade, 'currency')
         feeCurrencyId = None
         if receivedCurrencyId == quoteId:
             side = self.safe_string(otherTrade, 'side')
-            amount = self.safe_number(otherTrade, 'size')
-            cost = self.safe_number(userTrade, 'size')
+            amountString = self.safe_string(otherTrade, 'size')
+            costString = self.safe_string(userTrade, 'size')
             feeCurrencyId = self.safe_string(otherTrade, 'currency')
         else:
             side = self.safe_string(userTrade, 'side')
-            amount = self.safe_number(userTrade, 'size')
-            cost = self.safe_number(otherTrade, 'size')
+            amountString = self.safe_string(userTrade, 'size')
+            costString = self.safe_string(otherTrade, 'size')
             feeCurrencyId = self.safe_string(userTrade, 'currency')
         id = self.safe_string(userTrade, 'trade_id')
-        price = self.safe_number(userTrade, 'price')
-        feeCostFirst = self.safe_number(otherTrade, 'fee')
-        feeCostSecond = self.safe_number(userTrade, 'fee')
+        priceString = self.safe_string(userTrade, 'price')
+        feeCostFirstString = self.safe_string(otherTrade, 'fee')
+        feeCostSecondString = self.safe_string(userTrade, 'fee')
         feeCurrencyCodeFirst = self.safe_currency_code(self.safe_string(otherTrade, 'currency'))
         feeCurrencyCodeSecond = self.safe_currency_code(self.safe_string(userTrade, 'currency'))
         fee = None
@@ -2664,31 +2809,31 @@ class okcoin(Exchange):
         # or a negative number(transaction fee deduction)
         # therefore we need to invert the fee
         # more about it https://github.com/ccxt/ccxt/issues/5909
-        if (feeCostFirst is not None) and (feeCostFirst != 0):
-            if (feeCostSecond is not None) and (feeCostSecond != 0):
+        if (feeCostFirstString is not None) and not Precise.string_equals(feeCostFirstString, '0'):
+            if (feeCostSecondString is not None) and not Precise.string_equals(feeCostSecondString, '0'):
                 fees = [
                     {
-                        'cost': -feeCostFirst,
+                        'cost': Precise.string_neg(feeCostFirstString),
                         'currency': feeCurrencyCodeFirst,
                     },
                     {
-                        'cost': -feeCostSecond,
+                        'cost': Precise.string_neg(feeCostSecondString),
                         'currency': feeCurrencyCodeSecond,
                     },
                 ]
             else:
                 fee = {
-                    'cost': -feeCostFirst,
+                    'cost': Precise.string_neg(feeCostFirstString),
                     'currency': feeCurrencyCodeFirst,
                 }
-        elif (feeCostSecond is not None) and (feeCostSecond != 0):
+        elif (feeCostSecondString is not None) and not Precise.string_equals(feeCostSecondString, '0'):
             fee = {
-                'cost': -feeCostSecond,
+                'cost': Precise.string_neg(feeCostSecondString),
                 'currency': feeCurrencyCodeSecond,
             }
         else:
             fee = {
-                'cost': 0,
+                'cost': '0',
                 'currency': self.safe_currency_code(feeCurrencyId),
             }
         #
@@ -2731,7 +2876,7 @@ class okcoin(Exchange):
         elif takerOrMaker == 'T':
             takerOrMaker = 'taker'
         orderId = self.safe_string(userTrade, 'order_id')
-        result = {
+        return self.safe_trade({
             'info': pair,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
@@ -2741,14 +2886,12 @@ class okcoin(Exchange):
             'type': None,
             'takerOrMaker': takerOrMaker,
             'side': side,
-            'price': price,
-            'amount': amount,
-            'cost': cost,
+            'price': priceString,
+            'amount': amountString,
+            'cost': costString,
             'fee': fee,
-        }
-        if fees is not None:
-            result['fees'] = fees
-        return result
+            'fees': fees,
+        }, market)
 
     def parse_my_trades(self, trades, market=None, since=None, limit=None, params={}):
         grouped = self.group_by(trades, 'trade_id')

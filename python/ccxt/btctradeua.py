@@ -40,7 +40,6 @@ class btctradeua(Exchange):
                 'fetchFundingRateHistory': False,
                 'fetchFundingRates': False,
                 'fetchIndexOHLCV': False,
-                'fetchIsolatedPositions': False,
                 'fetchLeverage': False,
                 'fetchMarkOHLCV': False,
                 'fetchOpenOrders': True,
@@ -51,6 +50,8 @@ class btctradeua(Exchange):
                 'fetchPremiumIndexOHLCV': False,
                 'fetchTicker': True,
                 'fetchTrades': True,
+                'fetchTradingFee': False,
+                'fetchTradingFees': False,
                 'reduceMargin': False,
                 'setLeverage': False,
                 'setMarginMode': False,
@@ -338,7 +339,7 @@ class btctradeua(Exchange):
 
     def create_order(self, symbol, type, side, amount, price=None, params={}):
         if type == 'market':
-            raise ExchangeError(self.id + ' allows limit orders only')
+            raise ExchangeError(self.id + ' createOrder() allows limit orders only')
         self.load_markets()
         market = self.market(symbol)
         method = 'privatePost' + self.capitalize(side) + 'Id'

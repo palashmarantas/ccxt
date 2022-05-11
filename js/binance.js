@@ -3,7 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { ExchangeError, ArgumentsRequired, ExchangeNotAvailable, InsufficientFunds, OrderNotFound, InvalidOrder, DDoSProtection, InvalidNonce, AuthenticationError, RateLimitExceeded, PermissionDenied, NotSupported, BadRequest, BadSymbol, AccountSuspended, OrderImmediatelyFillable, OnMaintenance, BadResponse, RequestTimeout, OrderNotFillable } = require ('./base/errors');
+const { ExchangeError, ArgumentsRequired, ExchangeNotAvailable, InsufficientFunds, OrderNotFound, InvalidOrder, DDoSProtection, InvalidNonce, AuthenticationError, RateLimitExceeded, PermissionDenied, NotSupported, BadRequest, BadSymbol, AccountSuspended, OrderImmediatelyFillable, OnMaintenance, BadResponse, RequestTimeout, OrderNotFillable, MarginModeAlreadySet } = require ('./base/errors');
 const { TRUNCATE } = require ('./base/functions/number');
 const Precise = require ('./base/Precise');
 
@@ -30,26 +30,29 @@ module.exports = class binance extends Exchange {
                 'cancelAllOrders': true,
                 'cancelOrder': true,
                 'cancelOrders': undefined,
-                'createDepositAddress': undefined,
+                'createDepositAddress': false,
                 'createOrder': true,
                 'createReduceOnlyOrder': true,
-                'deposit': undefined,
+                'createStopLimitOrder': true,
+                'createStopMarketOrder': false,
+                'createStopOrder': true,
                 'fetchAccounts': undefined,
                 'fetchBalance': true,
                 'fetchBidsAsks': true,
+                'fetchBorrowInterest': true,
                 'fetchBorrowRate': true,
-                'fetchBorrowRateHistories': true,
+                'fetchBorrowRateHistories': undefined,
                 'fetchBorrowRateHistory': true,
                 'fetchBorrowRates': false,
                 'fetchBorrowRatesPerSymbol': false,
-                'fetchCanceledOrders': undefined,
+                'fetchCanceledOrders': false,
                 'fetchClosedOrder': undefined,
                 'fetchClosedOrders': 'emulated',
                 'fetchCurrencies': true,
-                'fetchDeposit': undefined,
+                'fetchDeposit': false,
                 'fetchDepositAddress': true,
-                'fetchDepositAddresses': undefined,
-                'fetchDepositAddressesByNetwork': undefined,
+                'fetchDepositAddresses': false,
+                'fetchDepositAddressesByNetwork': false,
                 'fetchDeposits': true,
                 'fetchFundingFee': undefined,
                 'fetchFundingFees': true,
@@ -58,22 +61,22 @@ module.exports = class binance extends Exchange {
                 'fetchFundingRateHistory': true,
                 'fetchFundingRates': true,
                 'fetchIndexOHLCV': true,
-                'fetchIsolatedPositions': undefined,
                 'fetchL3OrderBook': undefined,
                 'fetchLedger': undefined,
-                'fetchLeverage': undefined,
+                'fetchLeverage': false,
                 'fetchLeverageTiers': true,
+                'fetchMarketLeverageTiers': 'emulated',
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': true,
                 'fetchMyBuys': undefined,
                 'fetchMySells': undefined,
                 'fetchMyTrades': true,
                 'fetchOHLCV': true,
-                'fetchOpenOrder': undefined,
+                'fetchOpenOrder': false,
                 'fetchOpenOrders': true,
                 'fetchOrder': true,
                 'fetchOrderBook': true,
-                'fetchOrderBooks': undefined,
+                'fetchOrderBooks': false,
                 'fetchOrders': true,
                 'fetchOrderTrades': true,
                 'fetchPosition': undefined,
@@ -93,7 +96,6 @@ module.exports = class binance extends Exchange {
                 'fetchWithdrawal': false,
                 'fetchWithdrawals': true,
                 'fetchWithdrawalWhitelist': false,
-                'loadLeverageBrackets': true,
                 'reduceMargin': true,
                 'setLeverage': true,
                 'setMarginMode': true,
@@ -136,6 +138,7 @@ module.exports = class binance extends Exchange {
                 'api': {
                     'wapi': 'https://api.binance.com/wapi/v3',
                     'sapi': 'https://api.binance.com/sapi/v1',
+                    'sapiV3': 'https://api.binance.com/sapi/v3',
                     'dapiPublic': 'https://dapi.binance.com/dapi/v1',
                     'dapiPrivate': 'https://dapi.binance.com/dapi/v1',
                     'vapiPublic': 'https://vapi.binance.com/vapi/v1',
@@ -210,6 +213,7 @@ module.exports = class binance extends Exchange {
                         'margin/crossMarginData': { 'cost': 0.1, 'noCoin': 0.5 },
                         'margin/isolatedMarginData': { 'cost': 0.1, 'noCoin': 1 },
                         'margin/isolatedMarginTier': 0.1,
+                        'margin/rateLimit/order': 2,
                         'loan/income': 40, // Weight(UID): 6000 => cost = 0.006667 * 6000 = 40
                         'fiat/orders': 0.1,
                         'fiat/payments': 0.1,
@@ -249,6 +253,7 @@ module.exports = class binance extends Exchange {
                         'sub-account/transfer/subUserHistory': 0.1,
                         'sub-account/universalTransfer': 0.1,
                         'managed-subaccount/asset': 0.1,
+                        'managed-subaccount/accountSnapshot': 240,
                         // lending endpoints
                         'lending/daily/product/list': 0.1,
                         'lending/daily/userLeftQuota': 0.1,
@@ -323,9 +328,19 @@ module.exports = class binance extends Exchange {
                         'nft/user/getAsset': 20.001,
                         'pay/transactions': 20.001, // Weight(UID): 3000 => cost = 0.006667 * 3000 = 20.001
                         'giftcard/verify': 0.1,
+                        'algo/futures/openOrders': 0.1,
+                        'algo/futures/historicalOrders': 0.1,
+                        'algo/futures/subOrders': 0.1,
+                        'portfolio/account': 0.1,
+                        // staking
+                        'staking/productList': 0.1,
+                        'staking/position': 0.1,
+                        'staking/stakingRecord': 0.1,
+                        'staking/personalLeftQuota': 0.1,
                     },
                     'post': {
-                        'asset/dust': 0.06667, // Weight(UID): 10 => cost = 0.006667 * 10 = 0.06667
+                        'asset/dust': 1,
+                        'asset/dust-btc': 0.1,
                         'asset/transfer': 0.1,
                         'asset/get-funding-asset': 0.1,
                         'account/disableFastWithdrawSwitch': 0.1,
@@ -397,6 +412,12 @@ module.exports = class binance extends Exchange {
                         //
                         'giftcard/createCode': 0.1,
                         'giftcard/redeemCode': 0.1,
+                        'algo/futures/newOrderVp': 20.001,
+                        'algo/futures/newOrderTwap': 20.001,
+                        // staking
+                        'staking/purchase': 0.1,
+                        'staking/redeem': 0.1,
+                        'staking/setAutoStaking': 0.1,
                     },
                     'put': {
                         'userDataStream': 0.1,
@@ -413,6 +434,12 @@ module.exports = class binance extends Exchange {
                         // brokerage API TODO NO MENTION OF RATELIMIT IN BROKERAGE DOCS
                         'broker/subAccountApi': 1,
                         'broker/subAccountApi/ipRestriction/ipList': 1,
+                        'algo/futures/order': 0.1,
+                    },
+                },
+                'sapiV3': {
+                    'get': {
+                        'sub-account/assets': 1,
                     },
                 },
                 // deprecated
@@ -632,6 +659,7 @@ module.exports = class binance extends Exchange {
                         'order',
                         'batchOrders',
                         'userDataStream',
+                        'openAccount',
                     ],
                     'put': [
                         'userDataStream',
@@ -783,6 +811,12 @@ module.exports = class binance extends Exchange {
                 'defaultType': 'spot', // 'spot', 'future', 'margin', 'delivery'
                 'hasAlreadyAuthenticatedSuccessfully': false,
                 'warnOnFetchOpenOrdersWithoutSymbol': true,
+                // not an error
+                // https://github.com/ccxt/ccxt/issues/11268
+                // https://github.com/ccxt/ccxt/pull/11624
+                // POST https://fapi.binance.com/fapi/v1/marginType 400 Bad Request
+                // binanceusdm
+                'throwMarginModeAlreadySet': false,
                 'fetchPositions': 'positionRisk', // or 'account'
                 'recvWindow': 5 * 1000, // 5 sec, binance default
                 'timeDifference': 0, // the difference between system clock and Binance clock
@@ -807,7 +841,7 @@ module.exports = class binance extends Exchange {
                     'delivery': 'CMFUTURE',
                     'mining': 'MINING',
                 },
-                'typesByAccount': {
+                'accountsById': {
                     'MAIN': 'spot',
                     'FUNDING': 'funding',
                     'MARGIN': 'margin',
@@ -1155,6 +1189,7 @@ module.exports = class binance extends Exchange {
                     '-6020': BadRequest, // {"code":-6020,"msg":"Project not exists"}
                     '-7001': BadRequest, // {"code":-7001,"msg":"Date range is not supported."}
                     '-7002': BadRequest, // {"code":-7002,"msg":"Data request type is not supported."}
+                    '-9000': InsufficientFunds, // {"code":-9000,"msg":"user have no avaliable amount"}"
                     '-10017': BadRequest, // {"code":-10017,"msg":"Repay amount should not be larger than liability."}
                     '-11008': InsufficientFunds, // {"code":-11008,"msg":"Exceeding the account's maximum borrowable limit."} // undocumented
                     '-12014': RateLimitExceeded, // {"code":-12014,"msg":"More than 1 request in 3 seconds"}
@@ -1180,10 +1215,10 @@ module.exports = class binance extends Exchange {
         return this.decimalToPrecision (cost, TRUNCATE, this.markets[symbol]['precision']['quote'], this.precisionMode, this.paddingMode);
     }
 
-    currencyToPrecision (currency, fee) {
+    currencyToPrecision (code, fee) {
         // info is available in currencies only if the user has configured his api keys
-        if (this.safeValue (this.currencies[currency], 'precision') !== undefined) {
-            return this.decimalToPrecision (fee, TRUNCATE, this.currencies[currency]['precision'], this.precisionMode, this.paddingMode);
+        if (this.safeValue (this.currencies[code], 'precision') !== undefined) {
+            return this.decimalToPrecision (fee, TRUNCATE, this.currencies[code]['precision'], this.precisionMode, this.paddingMode);
         } else {
             return this.numberToString (fee);
         }
@@ -1326,7 +1361,7 @@ module.exports = class binance extends Exchange {
                 isWithdrawEnabled = isWithdrawEnabled || withdrawEnable;
                 fees[network] = withdrawFee;
                 const isDefault = this.safeValue (networkItem, 'isDefault');
-                if (isDefault || fee === undefined) {
+                if (isDefault || (fee === undefined)) {
                     fee = withdrawFee;
                 }
             }
@@ -1390,6 +1425,7 @@ module.exports = class binance extends Exchange {
         //                 "icebergAllowed":true,
         //                 "ocoAllowed":true,
         //                 "quoteOrderQtyMarketAllowed":true,
+        //                 "allowTrailingStop":false,
         //                 "isSpotTradingAllowed":true,
         //                 "isMarginTradingAllowed":true,
         //                 "filters":[
@@ -1399,8 +1435,10 @@ module.exports = class binance extends Exchange {
         //                     {"filterType":"MIN_NOTIONAL","minNotional":"0.00010000","applyToMarket":true,"avgPriceMins":5},
         //                     {"filterType":"ICEBERG_PARTS","limit":10},
         //                     {"filterType":"MARKET_LOT_SIZE","minQty":"0.00000000","maxQty":"63100.00000000","stepSize":"0.00000000"},
+        //                     {"filterType":"MAX_NUM_ORDERS","maxNumOrders":200},
         //                     {"filterType":"MAX_NUM_ALGO_ORDERS","maxNumAlgoOrders":5}
-        //                 ]
+        //                 ],
+        //                 "permissions":["SPOT","MARGIN"]}
         //             },
         //         ],
         //     }
@@ -1548,6 +1586,16 @@ module.exports = class binance extends Exchange {
                 contractSize = this.safeNumber (market, 'contractSize', this.parseNumber ('1'));
                 fees = this.fees[type];
             }
+            let active = (status === 'TRADING');
+            if (spot) {
+                const permissions = this.safeValue (market, 'permissions', []);
+                for (let j = 0; j < permissions.length; j++) {
+                    if (permissions[j] === 'TRD_GRP_003') {
+                        active = false;
+                        break;
+                    }
+                }
+            }
             const isMarginTradingAllowed = this.safeValue (market, 'isMarginTradingAllowed', false);
             const entry = {
                 'id': id,
@@ -1566,7 +1614,7 @@ module.exports = class binance extends Exchange {
                 'future': future,
                 'delivery': delivery,
                 'option': false,
-                'active': (status === 'TRADING'),
+                'active': active,
                 'contract': contract,
                 'linear': contract ? future : undefined,
                 'inverse': contract ? delivery : undefined,
@@ -1918,7 +1966,7 @@ module.exports = class binance extends Exchange {
             'symbol': market['id'],
         };
         if (limit !== undefined) {
-            request['limit'] = limit; // default 100, max 5000, see https://github.com/binance-exchange/binance-official-api-docs/blob/master/rest-api.md#order-book
+            request['limit'] = limit; // default 100, max 5000, see https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md#order-book
         }
         let method = 'publicGetDepth';
         if (market['linear']) {
@@ -2038,15 +2086,20 @@ module.exports = class binance extends Exchange {
 
     async fetchStatus (params = {}) {
         const response = await this.sapiGetSystemStatus (params);
-        let status = this.safeString (response, 'status');
-        if (status !== undefined) {
-            status = (status === '0') ? 'ok' : 'maintenance';
-            this.status = this.extend (this.status, {
-                'status': status,
-                'updated': this.milliseconds (),
-            });
-        }
-        return this.status;
+        //
+        //     {
+        //         "status": 0,              // 0: normal，1：system maintenance
+        //         "msg": "normal"           // "normal", "system_maintenance"
+        //     }
+        //
+        const statusRaw = this.safeString (response, 'status');
+        return {
+            'status': this.safeString ({ '0': 'ok', '1': 'maintenance' }, statusRaw, statusRaw),
+            'updated': this.milliseconds (),
+            'eta': undefined,
+            'url': undefined,
+            'info': response,
+        };
     }
 
     async fetchTicker (symbol, params = {}) {
@@ -2334,10 +2387,11 @@ module.exports = class binance extends Exchange {
         id = this.safeString2 (trade, 'id', 'tradeId', id);
         let side = undefined;
         const orderId = this.safeString (trade, 'orderId');
-        if ('m' in trade) {
-            side = trade['m'] ? 'sell' : 'buy'; // this is reversed intentionally
-        } else if ('isBuyerMaker' in trade) {
-            side = trade['isBuyerMaker'] ? 'sell' : 'buy';
+        const buyerMaker = this.safeValue2 (trade, 'm', 'isBuyerMaker');
+        let takerOrMaker = undefined;
+        if (buyerMaker !== undefined) {
+            side = buyerMaker ? 'sell' : 'buy'; // this is reversed intentionally
+            takerOrMaker = 'taker';
         } else if ('side' in trade) {
             side = this.safeStringLower (trade, 'side');
         } else {
@@ -2352,7 +2406,6 @@ module.exports = class binance extends Exchange {
                 'currency': this.safeCurrencyCode (this.safeString (trade, 'commissionAsset')),
             };
         }
-        let takerOrMaker = undefined;
         if ('isMaker' in trade) {
             takerOrMaker = trade['isMaker'] ? 'maker' : 'taker';
         }
@@ -2399,12 +2452,6 @@ module.exports = class binance extends Exchange {
         }
         let method = this.safeString (this.options, 'fetchTradesMethod', defaultMethod);
         if (method === 'publicGetAggTrades') {
-            if (since !== undefined) {
-                request['startTime'] = since;
-                // https://github.com/ccxt/ccxt/issues/6400
-                // https://github.com/binance-exchange/binance-official-api-docs/blob/master/rest-api.md#compressedaggregate-trades-list
-                request['endTime'] = this.sum (since, 3600000);
-            }
             if (type === 'future') {
                 method = 'fapiPublicGetAggTrades';
             } else if (type === 'delivery') {
@@ -2416,6 +2463,12 @@ module.exports = class binance extends Exchange {
             } else if (type === 'delivery') {
                 method = 'dapiPublicGetHistoricalTrades';
             }
+        }
+        if (since !== undefined) {
+            request['startTime'] = since;
+            // https://github.com/ccxt/ccxt/issues/6400
+            // https://github.com/binance-exchange/binance-official-api-docs/blob/master/rest-api.md#compressedaggregate-trades-list
+            request['endTime'] = this.sum (since, 3600000);
         }
         if (limit !== undefined) {
             request['limit'] = limit; // default = 500, maximum = 1000
@@ -2679,10 +2732,24 @@ module.exports = class binance extends Exchange {
                 type = 'LIMIT_MAKER';
             }
         }
-        const uppercaseType = type.toUpperCase ();
+        const initialUppercaseType = type.toUpperCase ();
+        let uppercaseType = initialUppercaseType;
+        const stopPrice = this.safeNumber (params, 'stopPrice');
+        if (stopPrice !== undefined) {
+            params = this.omit (params, 'stopPrice');
+            if (uppercaseType === 'MARKET') {
+                uppercaseType = market['contract'] ? 'STOP_MARKET' : 'STOP_LOSS';
+            } else if (uppercaseType === 'LIMIT') {
+                uppercaseType = market['contract'] ? 'STOP' : 'STOP_LOSS_LIMIT';
+            }
+        }
         const validOrderTypes = this.safeValue (market['info'], 'orderTypes');
         if (!this.inArray (uppercaseType, validOrderTypes)) {
-            throw new InvalidOrder (this.id + ' ' + type + ' is not a valid order type in market ' + symbol);
+            if (initialUppercaseType !== uppercaseType) {
+                throw new InvalidOrder (this.id + ' stopPrice parameter is not allowed for ' + symbol + ' ' + type + ' orders');
+            } else {
+                throw new InvalidOrder (this.id + ' ' + type + ' is not a valid order type for the ' + symbol + ' market');
+            }
         }
         const request = {
             'symbol': market['id'],
@@ -2799,11 +2866,9 @@ module.exports = class binance extends Exchange {
             request['timeInForce'] = this.options['defaultTimeInForce']; // 'GTC' = Good To Cancel (default), 'IOC' = Immediate Or Cancel
         }
         if (stopPriceIsRequired) {
-            const stopPrice = this.safeNumber (params, 'stopPrice');
             if (stopPrice === undefined) {
                 throw new InvalidOrder (this.id + ' createOrder() requires a stopPrice extra param for a ' + type + ' order');
             } else {
-                params = this.omit (params, 'stopPrice');
                 request['stopPrice'] = this.priceToPrecision (symbol, stopPrice);
             }
         }
@@ -2932,7 +2997,7 @@ module.exports = class binance extends Exchange {
             const symbols = this.symbols;
             const numSymbols = symbols.length;
             const fetchOpenOrdersRateLimit = parseInt (numSymbols / 2);
-            throw new ExchangeError (this.id + ' fetchOpenOrders WARNING: fetching open orders without specifying a symbol is rate-limited to one call per ' + fetchOpenOrdersRateLimit.toString () + ' seconds. Do not call this method frequently to avoid ban. Set ' + this.id + '.options["warnOnFetchOpenOrdersWithoutSymbol"] = false to suppress this warning message.');
+            throw new ExchangeError (this.id + ' fetchOpenOrders() WARNING: fetching open orders without specifying a symbol is rate-limited to one call per ' + fetchOpenOrdersRateLimit.toString () + ' seconds. Do not call this method frequently to avoid ban. Set ' + this.id + '.options["warnOnFetchOpenOrdersWithoutSymbol"] = false to suppress this warning message.');
         } else {
             const defaultType = this.safeString2 (this.options, 'fetchOpenOrders', 'defaultType', 'spot');
             type = this.safeString (params, 'type', defaultType);
@@ -3512,6 +3577,10 @@ module.exports = class binance extends Exchange {
         //       "updateTime": "1627501027000"
         //     }
         //
+        // withdraw
+        //
+        //    { id: '9a67628b16ba4988ae20d329333f16bc' }
+        //
         const id = this.safeString2 (transaction, 'id', 'orderNo');
         const address = this.safeString (transaction, 'address');
         let tag = this.safeString (transaction, 'addressTag'); // set but unused
@@ -3547,8 +3616,10 @@ module.exports = class binance extends Exchange {
             fee = { 'currency': code, 'cost': feeCost };
         }
         const updated = this.safeInteger2 (transaction, 'successTime', 'updateTime');
-        let internal = this.safeInteger (transaction, 'transferType', false);
-        internal = internal ? true : false;
+        let internal = this.safeInteger (transaction, 'transferType');
+        if (internal !== undefined) {
+            internal = internal ? true : false;
+        }
         const network = this.safeString (transaction, 'network');
         return {
             'info': transaction,
@@ -3606,13 +3677,13 @@ module.exports = class binance extends Exchange {
         const type = this.safeString (transfer, 'type');
         let fromAccount = undefined;
         let toAccount = undefined;
-        const typesByAccount = this.safeValue (this.options, 'typesByAccount', {});
+        const accountsById = this.safeValue (this.options, 'accountsById', {});
         if (type !== undefined) {
             const parts = type.split ('_');
             fromAccount = this.safeValue (parts, 0);
             toAccount = this.safeValue (parts, 1);
-            fromAccount = this.safeString (typesByAccount, fromAccount, fromAccount);
-            toAccount = this.safeString (typesByAccount, toAccount, toAccount);
+            fromAccount = this.safeString (accountsById, fromAccount, fromAccount);
+            toAccount = this.safeString (accountsById, toAccount, toAccount);
         }
         const timestamp = this.safeInteger (transfer, 'timestamp');
         const status = this.parseTransferStatus (this.safeString (transfer, 'status'));
@@ -3677,18 +3748,8 @@ module.exports = class binance extends Exchange {
         let type = this.safeString (params, 'type');
         if (type === undefined) {
             const accountsByType = this.safeValue (this.options, 'accountsByType', {});
-            fromAccount = fromAccount.toLowerCase ();
-            toAccount = toAccount.toLowerCase ();
-            const fromId = this.safeString (accountsByType, fromAccount);
-            const toId = this.safeString (accountsByType, toAccount);
-            if (fromId === undefined) {
-                const keys = Object.keys (accountsByType);
-                throw new ExchangeError (this.id + ' fromAccount must be one of ' + keys.join (', '));
-            }
-            if (toId === undefined) {
-                const keys = Object.keys (accountsByType);
-                throw new ExchangeError (this.id + ' toAccount must be one of ' + keys.join (', '));
-            }
+            const fromId = this.safeString (accountsByType, fromAccount, fromAccount);
+            const toId = this.safeString (accountsByType, toAccount, toAccount);
             type = fromId + '_' + toId;
         }
         const request = {
@@ -3963,10 +4024,7 @@ module.exports = class binance extends Exchange {
         }
         const response = await this.sapiPostCapitalWithdrawApply (this.extend (request, params));
         //     { id: '9a67628b16ba4988ae20d329333f16bc' }
-        return {
-            'info': response,
-            'id': this.safeString (response, 'id'),
-        };
+        return this.parseTransaction (response, currency);
     }
 
     parseTradingFee (fee, market = undefined) {
@@ -4238,6 +4296,7 @@ module.exports = class binance extends Exchange {
         }
         if (symbol !== undefined) {
             const market = this.market (symbol);
+            symbol = market['symbol'];
             request['symbol'] = market['id'];
             if (market['linear']) {
                 method = 'fapiPublicGetFundingRate';
@@ -4445,9 +4504,7 @@ module.exports = class binance extends Exchange {
         let entryPrice = this.parseNumber (entryPriceString);
         const notionalString = this.safeString2 (position, 'notional', 'notionalValue');
         const notionalStringAbs = Precise.stringAbs (notionalString);
-        const notionalFloat = parseFloat (notionalString);
-        const notionalFloatAbs = parseFloat (notionalStringAbs);
-        const notional = this.parseNumber (Precise.stringAbs (notionalString));
+        const notional = this.parseNumber (notionalStringAbs);
         let contractsString = this.safeString (position, 'positionAmt');
         let contractsStringAbs = Precise.stringAbs (contractsString);
         if (contractsString === undefined) {
@@ -4462,7 +4519,7 @@ module.exports = class binance extends Exchange {
         let maintenanceMarginPercentageString = undefined;
         for (let i = 0; i < leverageBracket.length; i++) {
             const bracket = leverageBracket[i];
-            if (notionalFloatAbs < bracket[0]) {
+            if (Precise.stringLt (notionalStringAbs, bracket[0])) {
                 break;
             }
             maintenanceMarginPercentageString = bracket[1];
@@ -4475,15 +4532,15 @@ module.exports = class binance extends Exchange {
             timestamp = undefined;
         }
         const isolated = this.safeValue (position, 'isolated');
-        let marginType = undefined;
+        let marginMode = undefined;
         let collateralString = undefined;
         let walletBalance = undefined;
         if (isolated) {
-            marginType = 'isolated';
+            marginMode = 'isolated';
             walletBalance = this.safeString (position, 'isolatedWallet');
             collateralString = Precise.stringAdd (walletBalance, unrealizedPnlString);
         } else {
-            marginType = 'cross';
+            marginMode = 'cross';
             walletBalance = this.safeString (position, 'crossWalletBalance');
             collateralString = this.safeString (position, 'crossMargin');
         }
@@ -4495,10 +4552,10 @@ module.exports = class binance extends Exchange {
         let liquidationPrice = undefined;
         const contractSize = this.safeValue (market, 'contractSize');
         const contractSizeString = this.numberToString (contractSize);
-        if (notionalFloat === 0.0) {
+        if (Precise.stringEquals (notionalString, '0')) {
             entryPrice = undefined;
         } else {
-            side = (notionalFloat < 0) ? 'short' : 'long';
+            side = Precise.stringLt (notionalString, '0') ? 'short' : 'long';
             marginRatio = this.parseNumber (Precise.stringDiv (Precise.stringAdd (Precise.stringDiv (maintenanceMarginString, collateralString), '5e-5'), '1', 4));
             percentage = this.parseNumber (Precise.stringMul (Precise.stringDiv (unrealizedPnlString, initialMarginString, 4), '100'));
             if (usdm) {
@@ -4574,7 +4631,8 @@ module.exports = class binance extends Exchange {
             'liquidationPrice': liquidationPrice,
             'markPrice': undefined,
             'collateral': collateral,
-            'marginType': marginType,
+            'marginMode': marginMode,
+            'marginType': marginMode, // deprecated
             'side': side,
             'hedged': hedged,
             'percentage': percentage,
@@ -4622,17 +4680,15 @@ module.exports = class binance extends Exchange {
         //
         const marketId = this.safeString (position, 'symbol');
         market = this.safeMarket (marketId, market);
-        const symbol = market['symbol'];
+        const symbol = this.safeString (market, 'symbol');
         const leverageBrackets = this.safeValue (this.options, 'leverageBrackets', {});
         const leverageBracket = this.safeValue (leverageBrackets, symbol, []);
         const notionalString = this.safeString2 (position, 'notional', 'notionalValue');
         const notionalStringAbs = Precise.stringAbs (notionalString);
-        const notionalFloatAbs = parseFloat (notionalStringAbs);
-        const notionalFloat = parseFloat (notionalString);
         let maintenanceMarginPercentageString = undefined;
         for (let i = 0; i < leverageBracket.length; i++) {
             const bracket = leverageBracket[i];
-            if (notionalFloatAbs < bracket[0]) {
+            if (Precise.stringLt (notionalStringAbs, bracket[0])) {
                 break;
             }
             maintenanceMarginPercentageString = bracket[1];
@@ -4647,11 +4703,11 @@ module.exports = class binance extends Exchange {
         const liquidationPriceString = this.omitZero (this.safeString (position, 'liquidationPrice'));
         const liquidationPrice = this.parseNumber (liquidationPriceString);
         let collateralString = undefined;
-        const marginType = this.safeString (position, 'marginType');
+        const marginMode = this.safeString (position, 'marginType');
         let side = undefined;
-        if (notionalFloat > 0) {
+        if (Precise.stringGt (notionalString, '0')) {
             side = 'long';
-        } else if (notionalFloat < 0) {
+        } else if (Precise.stringLt (notionalString, '0')) {
             side = 'short';
         }
         const entryPriceString = this.safeString (position, 'entryPrice');
@@ -4660,8 +4716,9 @@ module.exports = class binance extends Exchange {
         const contractSizeString = this.numberToString (contractSize);
         // as oppose to notionalValue
         const linear = ('notional' in position);
-        if (marginType === 'cross') {
+        if (marginMode === 'cross') {
             // calculate collateral
+            const precision = this.safeValue (market, 'precision', {});
             if (linear) {
                 // walletBalance = (liquidationPrice * (±1 + mmp) ± entryPrice) * contracts
                 let onePlusMaintenanceMarginPercentageString = undefined;
@@ -4674,7 +4731,11 @@ module.exports = class binance extends Exchange {
                 }
                 const inner = Precise.stringMul (liquidationPriceString, onePlusMaintenanceMarginPercentageString);
                 const leftSide = Precise.stringAdd (inner, entryPriceSignString);
-                collateralString = Precise.stringDiv (Precise.stringMul (leftSide, contractsAbs), '1', market['precision']['quote']);
+                const pricePrecision = this.safeInteger (precision, 'price');
+                const quotePrecision = this.safeInteger (precision, 'quote', pricePrecision);
+                if (quotePrecision !== undefined) {
+                    collateralString = Precise.stringDiv (Precise.stringMul (leftSide, contractsAbs), '1', quotePrecision);
+                }
             } else {
                 // walletBalance = (contracts * contractSize) * (±1/entryPrice - (±1 - mmp) / liquidationPrice)
                 let onePlusMaintenanceMarginPercentageString = undefined;
@@ -4687,13 +4748,15 @@ module.exports = class binance extends Exchange {
                 }
                 const leftSide = Precise.stringMul (contractsAbs, contractSizeString);
                 const rightSide = Precise.stringSub (Precise.stringDiv ('1', entryPriceSignString), Precise.stringDiv (onePlusMaintenanceMarginPercentageString, liquidationPriceString));
-                collateralString = Precise.stringDiv (Precise.stringMul (leftSide, rightSide), '1', market['precision']['base']);
+                const basePrecision = this.safeInteger (precision, 'base');
+                if (basePrecision !== undefined) {
+                    collateralString = Precise.stringDiv (Precise.stringMul (leftSide, rightSide), '1', basePrecision);
+                }
             }
         } else {
             collateralString = this.safeString (position, 'isolatedMargin');
         }
         collateralString = (collateralString === undefined) ? '0' : collateralString;
-        const collateralFloat = parseFloat (collateralString);
         const collateral = this.parseNumber (collateralString);
         const markPrice = this.parseNumber (this.omitZero (this.safeString (position, 'markPrice')));
         let timestamp = this.safeInteger (position, 'updateTime');
@@ -4712,7 +4775,7 @@ module.exports = class binance extends Exchange {
         const initialMargin = this.parseNumber (initialMarginString);
         let marginRatio = undefined;
         let percentage = undefined;
-        if (collateralFloat !== 0.0) {
+        if (!Precise.stringEquals (collateralString, '0')) {
             marginRatio = this.parseNumber (Precise.stringDiv (Precise.stringAdd (Precise.stringDiv (maintenanceMarginString, collateralString), '5e-5'), '1', 4));
             percentage = this.parseNumber (Precise.stringMul (Precise.stringDiv (unrealizedPnlString, initialMarginString, 4), '100'));
         }
@@ -4737,7 +4800,8 @@ module.exports = class binance extends Exchange {
             'maintenanceMarginPercentage': maintenanceMarginPercentage,
             'marginRatio': marginRatio,
             'datetime': this.iso8601 (timestamp),
-            'marginType': marginType,
+            'marginMode': marginMode,
+            'marginType': marginMode, // deprecated
             'side': side,
             'hedged': hedged,
             'percentage': percentage,
@@ -4771,8 +4835,7 @@ module.exports = class binance extends Exchange {
                 const result = [];
                 for (let j = 0; j < brackets.length; j++) {
                     const bracket = brackets[j];
-                    // we use floats here internally on purpose
-                    const floorValue = this.safeFloat2 (bracket, 'notionalFloor', 'qtyFloor');
+                    const floorValue = this.safeString2 (bracket, 'notionalFloor', 'qtyFloor');
                     const maintenanceMarginPercentage = this.safeString (bracket, 'maintMarginRatio');
                     result.push ([ floorValue, maintenanceMarginPercentage ]);
                 }
@@ -4782,7 +4845,7 @@ module.exports = class binance extends Exchange {
         return this.options['leverageBrackets'];
     }
 
-    async fetchLeverageTiers (symbol = undefined, params = {}) {
+    async fetchLeverageTiers (symbols = undefined, params = {}) {
         await this.loadMarkets ();
         const [ type, query ] = this.handleMarketTypeAndParams ('fetchLeverageTiers', undefined, params);
         let method = undefined;
@@ -4794,6 +4857,8 @@ module.exports = class binance extends Exchange {
             throw new NotSupported (this.id + ' fetchLeverageTiers() supports linear and inverse contracts only');
         }
         const response = await this[method] (query);
+        //
+        // usdm
         //
         //    [
         //        {
@@ -4812,38 +4877,68 @@ module.exports = class binance extends Exchange {
         //        }
         //    ]
         //
-        const leverageBrackets = {};
-        for (let i = 0; i < response.length; i++) {
-            const entry = response[i];
-            const marketId = this.safeString (entry, 'symbol');
-            const safeSymbol = this.safeSymbol (marketId);
-            let market = { 'base': undefined };
-            if (safeSymbol in this.markets) {
-                market = this.market (safeSymbol);
-            }
-            const brackets = this.safeValue (entry, 'brackets');
-            const result = [];
-            for (let j = 0; j < brackets.length; j++) {
-                const bracket = brackets[j];
-                result.push ({
-                    'tier': this.safeNumber (bracket, 'bracket'),
-                    'notionalCurrency': market['quote'],
-                    'notionalFloor': this.safeFloat2 (bracket, 'notionalFloor', 'qtyFloor'),
-                    'notionalCap': this.safeNumber (bracket, 'notionalCap'),
-                    'maintenanceMarginRate': this.safeNumber (bracket, 'maintMarginRatio'),
-                    'maxLeverage': this.safeNumber (bracket, 'initialLeverage'),
-                    'info': bracket,
-                });
-            }
-            leverageBrackets[safeSymbol] = result;
+        // coinm
+        //
+        //     [
+        //         {
+        //             "symbol":"XRPUSD_210326",
+        //             "brackets":[
+        //                 {
+        //                     "bracket":1,
+        //                     "initialLeverage":20,
+        //                     "qtyCap":500000,
+        //                     "qtyFloor":0,
+        //                     "maintMarginRatio":0.0185,
+        //                     "cum":0.0
+        //                 }
+        //             ]
+        //         }
+        //     ]
+        //
+        return this.parseLeverageTiers (response, symbols, 'symbol');
+    }
+
+    parseMarketLeverageTiers (info, market) {
+        /**
+         * @ignore
+         * @method
+         * @param {dict} info Exchange response for 1 market
+         * @param {dict} market CCXT market
+         */
+        //
+        //    {
+        //        "symbol": "SUSHIUSDT",
+        //        "brackets": [
+        //            {
+        //                "bracket": 1,
+        //                "initialLeverage": 50,
+        //                "notionalCap": 50000,
+        //                "notionalFloor": 0,
+        //                "maintMarginRatio": 0.01,
+        //                "cum": 0.0
+        //            },
+        //            ...
+        //        ]
+        //    }
+        //
+        const marketId = this.safeString (info, 'symbol');
+        const safeSymbol = this.safeSymbol (marketId);
+        market = this.safeMarket (safeSymbol, market);
+        const brackets = this.safeValue (info, 'brackets');
+        const tiers = [];
+        for (let j = 0; j < brackets.length; j++) {
+            const bracket = brackets[j];
+            tiers.push ({
+                'tier': this.safeNumber (bracket, 'bracket'),
+                'currency': market['quote'],
+                'minNotional': this.safeNumber2 (bracket, 'notionalFloor', 'qtyFloor'),
+                'maxNotional': this.safeNumber (bracket, 'notionalCap', 'qtyCap'),
+                'maintenanceMarginRate': this.safeNumber (bracket, 'maintMarginRatio'),
+                'maxLeverage': this.safeNumber (bracket, 'initialLeverage'),
+                'info': bracket,
+            });
         }
-        if (symbol !== undefined) {
-            const result = {};
-            result[symbol] = this.safeValue (leverageBrackets, symbol);
-            return result;
-        } else {
-            return leverageBrackets;
-        }
+        return tiers;
     }
 
     async fetchPositions (symbols = undefined, params = {}) {
@@ -4860,7 +4955,7 @@ module.exports = class binance extends Exchange {
     async fetchAccountPositions (symbols = undefined, params = {}) {
         if (symbols !== undefined) {
             if (!Array.isArray (symbols)) {
-                throw new ArgumentsRequired (this.id + ' fetchPositions requires an array argument for symbols');
+                throw new ArgumentsRequired (this.id + ' fetchPositions() requires an array argument for symbols');
             }
         }
         await this.loadMarkets ();
@@ -4884,7 +4979,7 @@ module.exports = class binance extends Exchange {
     async fetchPositionsRisk (symbols = undefined, params = {}) {
         if (symbols !== undefined) {
             if (!Array.isArray (symbols)) {
-                throw new ArgumentsRequired (this.id + ' fetchPositionsRisk requires an array argument for symbols');
+                throw new ArgumentsRequired (this.id + ' fetchPositionsRisk() requires an array argument for symbols');
             }
         }
         await this.loadMarkets ();
@@ -5030,7 +5125,7 @@ module.exports = class binance extends Exchange {
         return await this[method] (this.extend (request, params));
     }
 
-    async setMarginMode (marginType, symbol = undefined, params = {}) {
+    async setMarginMode (marginMode, symbol = undefined, params = {}) {
         if (symbol === undefined) {
             throw new ArgumentsRequired (this.id + ' setMarginMode() requires a symbol argument');
         }
@@ -5041,12 +5136,12 @@ module.exports = class binance extends Exchange {
         //
         // { "code": 200, "msg": "success" }
         //
-        marginType = marginType.toUpperCase ();
-        if (marginType === 'CROSS') {
-            marginType = 'CROSSED';
+        marginMode = marginMode.toUpperCase ();
+        if (marginMode === 'CROSS') {
+            marginMode = 'CROSSED';
         }
-        if ((marginType !== 'ISOLATED') && (marginType !== 'CROSSED')) {
-            throw new BadRequest (this.id + ' marginType must be either isolated or cross');
+        if ((marginMode !== 'ISOLATED') && (marginMode !== 'CROSSED')) {
+            throw new BadRequest (this.id + ' marginMode must be either isolated or cross');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -5060,9 +5155,27 @@ module.exports = class binance extends Exchange {
         }
         const request = {
             'symbol': market['id'],
-            'marginType': marginType,
+            'marginType': marginMode,
         };
-        return await this[method] (this.extend (request, params));
+        let response = undefined;
+        try {
+            response = await this[method] (this.extend (request, params));
+        } catch (e) {
+            // not an error
+            // https://github.com/ccxt/ccxt/issues/11268
+            // https://github.com/ccxt/ccxt/pull/11624
+            // POST https://fapi.binance.com/fapi/v1/marginType 400 Bad Request
+            // binanceusdm
+            if (e instanceof MarginModeAlreadySet) {
+                const throwMarginModeAlreadySet = this.safeValue (this.options, 'throwMarginModeAlreadySet', false);
+                if (throwMarginModeAlreadySet) {
+                    throw e;
+                } else {
+                    response = { 'code': -4046, 'msg': 'No need to change margin type.' };
+                }
+            }
+        }
+        return response;
     }
 
     async setPositionMode (hedged, symbol = undefined, params = {}) {
@@ -5126,14 +5239,20 @@ module.exports = class binance extends Exchange {
             } else {
                 throw new AuthenticationError (this.id + ' userDataStream endpoint requires `apiKey` credential');
             }
-        } else if ((api === 'private') || (api === 'sapi' && path !== 'system/status') || (api === 'wapi' && path !== 'systemStatus') || (api === 'dapiPrivate') || (api === 'dapiPrivateV2') || (api === 'fapiPrivate') || (api === 'fapiPrivateV2')) {
+        } else if ((api === 'private') || (api === 'sapi' && path !== 'system/status') || (api === 'sapiV3') || (api === 'wapi' && path !== 'systemStatus') || (api === 'dapiPrivate') || (api === 'dapiPrivateV2') || (api === 'fapiPrivate') || (api === 'fapiPrivateV2')) {
             this.checkRequiredCredentials ();
             let query = undefined;
-            const recvWindow = this.safeInteger (this.options, 'recvWindow', 5000);
+            const defaultRecvWindow = this.safeInteger (this.options, 'recvWindow');
             const extendedParams = this.extend ({
                 'timestamp': this.nonce (),
-                'recvWindow': recvWindow,
             }, params);
+            if (defaultRecvWindow !== undefined) {
+                extendedParams['recvWindow'] = defaultRecvWindow;
+            }
+            const recvWindow = this.safeInteger (params, 'recvWindow');
+            if (recvWindow !== undefined) {
+                extendedParams['recvWindow'] = recvWindow;
+            }
             if ((api === 'sapi') && (path === 'asset/dust')) {
                 query = this.urlencodeWithArrayRepeat (extendedParams);
             } else if ((path === 'batchOrders') || (path.indexOf ('sub-account') >= 0) || (path === 'capital/withdraw/apply')) {
@@ -5175,7 +5294,7 @@ module.exports = class binance extends Exchange {
                 throw new InvalidOrder (this.id + ' order amount should be evenly divisible by lot size ' + body);
             }
             if (body.indexOf ('PRICE_FILTER') >= 0) {
-                throw new InvalidOrder (this.id + ' order price is invalid, i.e. exceeds allowed price precision, exceeds min price or max price limits or is invalid float value in general, use this.priceToPrecision (symbol, amount) ' + body);
+                throw new InvalidOrder (this.id + ' order price is invalid, i.e. exceeds allowed price precision, exceeds min price or max price limits or is invalid value in general, use this.priceToPrecision (symbol, amount) ' + body);
             }
         }
         if (response === undefined) {
@@ -5218,15 +5337,15 @@ module.exports = class binance extends Exchange {
             if ((error === '-2015') && this.options['hasAlreadyAuthenticatedSuccessfully']) {
                 throw new DDoSProtection (this.id + ' temporary banned: ' + body);
             }
+            const feedback = this.id + ' ' + body;
             if (message === 'No need to change margin type.') {
                 // not an error
                 // https://github.com/ccxt/ccxt/issues/11268
                 // https://github.com/ccxt/ccxt/pull/11624
                 // POST https://fapi.binance.com/fapi/v1/marginType 400 Bad Request
                 // binanceusdm {"code":-4046,"msg":"No need to change margin type."}
-                return true;
+                throw new MarginModeAlreadySet (feedback);
             }
-            const feedback = this.id + ' ' + body;
             this.throwExactlyMatchedException (this.exceptions['exact'], error, feedback);
             throw new ExchangeError (feedback);
         }
@@ -5276,6 +5395,7 @@ module.exports = class binance extends Exchange {
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
+        amount = this.amountToPrecision (symbol, amount);
         const request = {
             'type': addOrReduce,
             'symbol': market['id'],
@@ -5293,22 +5413,28 @@ module.exports = class binance extends Exchange {
         const response = await this[method] (this.extend (request, params));
         //
         //     {
-        //       "code": 200,
-        //       "msg": "Successfully modify position margin.",
-        //       "amount": 0.001,
-        //       "type": 1
+        //         "code": 200,
+        //         "msg": "Successfully modify position margin.",
+        //         "amount": 0.001,
+        //         "type": 1
         //     }
         //
-        const rawType = this.safeInteger (response, 'type');
+        return this.extend (this.parseModifyMargin (response, market), {
+            'code': code,
+        });
+    }
+
+    parseModifyMargin (data, market = undefined) {
+        const rawType = this.safeInteger (data, 'type');
         const resultType = (rawType === 1) ? 'add' : 'reduce';
-        const resultAmount = this.safeNumber (response, 'amount');
-        const errorCode = this.safeString (response, 'code');
+        const resultAmount = this.safeNumber (data, 'amount');
+        const errorCode = this.safeString (data, 'code');
         const status = (errorCode === '200') ? 'ok' : 'failed';
         return {
-            'info': response,
+            'info': data,
             'type': resultType,
             'amount': resultAmount,
-            'code': code,
+            'code': undefined,
             'symbol': market['symbol'],
             'status': status,
         };
@@ -5331,26 +5457,17 @@ module.exports = class binance extends Exchange {
         };
         const response = await this.sapiGetMarginInterestRateHistory (this.extend (request, params));
         //
-        // [
-        //     {
-        //         "asset": "USDT",
-        //         "timestamp": 1638230400000,
-        //         "dailyInterestRate": "0.0006",
-        //         "vipLevel": 0
-        //     },
-        //     ...
-        // ]
+        //     [
+        //         {
+        //             "asset": "USDT",
+        //             "timestamp": 1638230400000,
+        //             "dailyInterestRate": "0.0006",
+        //             "vipLevel": 0
+        //         },
+        //     ]
         //
         const rate = this.safeValue (response, 0);
-        const timestamp = this.safeNumber (rate, 'timestamp');
-        return {
-            'currency': code,
-            'rate': this.safeNumber (rate, 'dailyInterestRate'),
-            'period': 86400000,
-            'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
-            'info': response,
-        };
+        return this.parseBorrowRate (rate);
     }
 
     async fetchBorrowRateHistory (code, since = undefined, limit = undefined, params = {}) {
@@ -5359,7 +5476,7 @@ module.exports = class binance extends Exchange {
             limit = 93;
         } else if (limit > 93) {
             // Binance API says the limit is 100, but "Illegal characters found in a parameter." is returned when limit is > 93
-            throw new BadRequest (this.id + ' fetchBorrowRateHistory limit parameter cannot exceed 92');
+            throw new BadRequest (this.id + ' fetchBorrowRateHistory() limit parameter cannot exceed 92');
         }
         const currency = this.currency (code);
         const request = {
@@ -5383,19 +5500,39 @@ module.exports = class binance extends Exchange {
         //         },
         //     ]
         //
+        return this.parseBorrowRateHistory (response);
+    }
+
+    parseBorrowRateHistory (response, code, since, limit) {
         const result = [];
         for (let i = 0; i < response.length; i++) {
             const item = response[i];
-            const timestamp = this.safeNumber (item, 'timestamp');
-            result.push ({
-                'currency': code,
-                'rate': this.safeNumber (item, 'dailyInterestRate'),
-                'timestamp': timestamp,
-                'datetime': this.iso8601 (timestamp),
-                'info': item,
-            });
+            const borrowRate = this.parseBorrowRate (item);
+            result.push (borrowRate);
         }
-        return result;
+        const sorted = this.sortBy (result, 'timestamp');
+        return this.filterByCurrencySinceLimit (sorted, code, since, limit);
+    }
+
+    parseBorrowRate (info, currency = undefined) {
+        //
+        //    {
+        //        "asset": "USDT",
+        //        "timestamp": 1638230400000,
+        //        "dailyInterestRate": "0.0006",
+        //        "vipLevel": 0
+        //    }
+        //
+        const timestamp = this.safeNumber (info, 'timestamp');
+        currency = this.safeString (info, 'asset');
+        return {
+            'currency': this.safeCurrencyCode (currency),
+            'rate': this.safeNumber (info, 'dailyInterestRate'),
+            'period': 86400000,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'info': info,
+        };
     }
 
     async createGiftCode (code, amount, params = {}) {
@@ -5409,10 +5546,10 @@ module.exports = class binance extends Exchange {
         const response = await this.sapiPostGiftcardCreateCode (this.extend (request, params));
         //
         //     {
-        //       code: '000000',
-        //       message: 'success',
-        //       data: { referenceNo: '0033002404219823', code: 'AP6EXTLKNHM6CEX7' },
-        //       success: true
+        //         code: '000000',
+        //         message: 'success',
+        //         data: { referenceNo: '0033002404219823', code: 'AP6EXTLKNHM6CEX7' },
+        //         success: true
         //     }
         //
         const data = this.safeValue (response, 'data');
@@ -5434,13 +5571,13 @@ module.exports = class binance extends Exchange {
         const response = await this.sapiPostGiftcardRedeemCode (this.extend (request, params));
         //
         //     {
-        //       code: '000000',
-        //       message: 'success',
-        //       data: {
-        //         referenceNo: '0033002404219823',
-        //         identityNo: '10316431732801474560'
-        //       },
-        //       success: true
+        //         code: '000000',
+        //         message: 'success',
+        //         data: {
+        //             referenceNo: '0033002404219823',
+        //             identityNo: '10316431732801474560'
+        //         },
+        //         success: true
         //     }
         //
         return response;
@@ -5453,12 +5590,71 @@ module.exports = class binance extends Exchange {
         const response = await this.sapiGetGiftcardVerify (this.extend (request, params));
         //
         //     {
-        //       code: '000000',
-        //       message: 'success',
-        //       data: { valid: true },
-        //       success: true
+        //         code: '000000',
+        //         message: 'success',
+        //         data: { valid: true },
+        //         success: true
         //     }
         //
         return response;
+    }
+
+    async fetchBorrowInterest (code = undefined, symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        const request = {};
+        let market = undefined;
+        if (code !== undefined) {
+            const currency = this.currency (code);
+            request['asset'] = currency['id'];
+        }
+        if (since !== undefined) {
+            request['startTime'] = since;
+        }
+        if (limit !== undefined) {
+            request['size'] = limit;
+        }
+        if (symbol !== undefined) { // Isolated
+            market = this.market (symbol);
+            request['isolatedSymbol'] = market['id'];
+        }
+        const response = await this.sapiGetMarginInterestHistory (this.extend (request, params));
+        //
+        //     {
+        //         "rows":[
+        //             {
+        //                 "isolatedSymbol": "BNBUSDT", // isolated symbol, will not be returned for crossed margin
+        //                 "asset": "BNB",
+        //                 "interest": "0.02414667",
+        //                 "interestAccuredTime": 1566813600000,
+        //                 "interestRate": "0.01600000",
+        //                 "principal": "36.22000000",
+        //                 "type": "ON_BORROW"
+        //             }
+        //         ],
+        //         "total": 1
+        //     }
+        //
+        const rows = this.safeValue (response, 'rows');
+        const interest = this.parseBorrowInterests (rows, market);
+        return this.filterByCurrencySinceLimit (interest, code, since, limit);
+    }
+
+    parseBorrowInterest (info, market) {
+        const symbol = this.safeString (info, 'isolatedSymbol');
+        const timestamp = this.safeNumber (info, 'interestAccuredTime');
+        const marginMode = (symbol === undefined) ? 'cross' : 'isolated';
+        return {
+            'account': (symbol === undefined) ? 'cross' : symbol,
+            'symbol': symbol,
+            'marginType': marginMode, // deprecated
+            'marginMode': marginMode,
+            'currency': this.safeCurrencyCode (this.safeString (info, 'asset')),
+            'interest': this.safeNumber (info, 'interest'),
+            'interestRate': this.safeNumber (info, 'interestRate'),
+            'amountBorrowed': this.safeNumber (info, 'principal'),
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'info': info,
+        };
     }
 };

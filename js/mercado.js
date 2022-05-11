@@ -37,7 +37,6 @@ module.exports = class mercado extends Exchange {
                 'fetchFundingRateHistory': false,
                 'fetchFundingRates': false,
                 'fetchIndexOHLCV': false,
-                'fetchIsolatedPositions': false,
                 'fetchLeverage': false,
                 'fetchLeverageTiers': false,
                 'fetchMarkets': true,
@@ -55,6 +54,8 @@ module.exports = class mercado extends Exchange {
                 'fetchTicker': true,
                 'fetchTickers': undefined,
                 'fetchTrades': true,
+                'fetchTradingFee': false,
+                'fetchTradingFees': false,
                 'reduceMargin': false,
                 'setLeverage': false,
                 'setMarginMode': false,
@@ -407,7 +408,7 @@ module.exports = class mercado extends Exchange {
 
     async cancelOrder (id, symbol = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' cancelOrder () requires a symbol argument');
+            throw new ArgumentsRequired (this.id + ' cancelOrder() requires a symbol argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -527,7 +528,7 @@ module.exports = class mercado extends Exchange {
 
     async fetchOrder (id, symbol = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchOrder () requires a symbol argument');
+            throw new ArgumentsRequired (this.id + ' fetchOrder() requires a symbol argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -572,9 +573,65 @@ module.exports = class mercado extends Exchange {
             }
         }
         const response = await this.privatePostWithdrawCoin (this.extend (request, params));
+        //
+        //     {
+        //         "response_data": {
+        //             "withdrawal": {
+        //                 "id": 1,
+        //                 "coin": "BRL",
+        //                 "quantity": "300.56",
+        //                 "net_quantity": "291.68",
+        //                 "fee": "8.88",
+        //                 "account": "bco: 341, ag: 1111, cta: 23456-X",
+        //                 "status": 1,
+        //                 "created_timestamp": "1453912088",
+        //                 "updated_timestamp": "1453912088"
+        //             }
+        //         },
+        //         "status_code": 100,
+        //         "server_unix_timestamp": "1453912088"
+        //     }
+        //
+        const responseData = this.safeValue (response, 'response_data', {});
+        const withdrawal = this.safeValue (responseData, 'withdrawal');
+        return this.parseTransaction (withdrawal, currency);
+    }
+
+    parseTransaction (transaction, currency = undefined) {
+        //
+        //     {
+        //         "id": 1,
+        //         "coin": "BRL",
+        //         "quantity": "300.56",
+        //         "net_quantity": "291.68",
+        //         "fee": "8.88",
+        //         "account": "bco: 341, ag: 1111, cta: 23456-X",
+        //         "status": 1,
+        //         "created_timestamp": "1453912088",
+        //         "updated_timestamp": "1453912088"
+        //     }
+        //
+        currency = this.safeCurrency (undefined, currency);
         return {
-            'info': response,
-            'id': response['response_data']['withdrawal']['id'],
+            'id': this.safeString (transaction, 'id'),
+            'txid': undefined,
+            'timestamp': undefined,
+            'datetime': undefined,
+            'network': undefined,
+            'addressFrom': undefined,
+            'address': undefined,
+            'addressTo': undefined,
+            'amount': undefined,
+            'type': undefined,
+            'currency': currency['code'],
+            'status': undefined,
+            'updated': undefined,
+            'tagFrom': undefined,
+            'tag': undefined,
+            'tagTo': undefined,
+            'comment': undefined,
+            'fee': undefined,
+            'info': transaction,
         };
     }
 
@@ -613,7 +670,7 @@ module.exports = class mercado extends Exchange {
 
     async fetchOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchOrders () requires a symbol argument');
+            throw new ArgumentsRequired (this.id + ' fetchOrders() requires a symbol argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -628,7 +685,7 @@ module.exports = class mercado extends Exchange {
 
     async fetchOpenOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchOpenOrders () requires a symbol argument');
+            throw new ArgumentsRequired (this.id + ' fetchOpenOrders() requires a symbol argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -644,7 +701,7 @@ module.exports = class mercado extends Exchange {
 
     async fetchMyTrades (symbol = undefined, since = undefined, limit = undefined, params = {}) {
         if (symbol === undefined) {
-            throw new ArgumentsRequired (this.id + ' fetchMyTrades () requires a symbol argument');
+            throw new ArgumentsRequired (this.id + ' fetchMyTrades() requires a symbol argument');
         }
         await this.loadMarkets ();
         const market = this.market (symbol);
@@ -657,7 +714,7 @@ module.exports = class mercado extends Exchange {
         const ordersRaw = this.safeValue (responseData, 'orders', []);
         const orders = this.parseOrders (ordersRaw, market, since, limit);
         const trades = this.ordersToTrades (orders);
-        return this.filterBySymbolSinceLimit (trades, symbol, since, limit);
+        return this.filterBySymbolSinceLimit (trades, market['symbol'], since, limit);
     }
 
     ordersToTrades (orders) {
